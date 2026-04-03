@@ -1,0 +1,89 @@
+{
+  "@@locale": "en",
+  "appTitle": "unpub",
+  "notFound": "Not found",
+  "searchPackages": "Search packages",
+  "admin": "Admin",
+  "login": "Login",
+  "switchToDark": "Switch to dark mode",
+  "switchToLight": "Switch to light mode",
+  "privatePackages": "Private packages",
+  "searchResultsFor": "Search results for \"{query}\"",
+  "@searchResultsFor": {
+    "placeholders": {
+      "query": {}
+    }
+  },
+  "packageCount": "{count, plural, =1{1 package} other{{count} packages}}",
+  "@packageCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "noDescription": "No description",
+  "versions": "Versions",
+  "pasteBearerToken": "Paste bearer token for admin APIs.",
+  "bearerToken": "Bearer token",
+  "enterBearerToken": "Enter bearer token",
+  "invalidTokenUnauthorized": "Invalid token or unauthorized",
+  "validating": "Validating...",
+  "adminDashboard": "Admin Dashboard",
+  "logout": "Logout",
+  "sessionToken": "Session: {token}",
+  "@sessionToken": {
+    "placeholders": {
+      "token": {}
+    }
+  },
+  "includeAllAdminOnly": "Include all (admin only)",
+  "refresh": "Refresh",
+  "createToken": "Create Token",
+  "ownerNameOptional": "owner_name (optional)",
+  "expiresAtOptional": "expires_at (ISO-8601, optional)",
+  "createTokenCta": "Create token",
+  "revokeToken": "Revoke Token",
+  "tokenId": "Token id",
+  "revoke": "Revoke",
+  "tokensHeading": "Tokens ({count})",
+  "@tokensHeading": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "downloadLogsHeading": "Download Logs ({count})",
+  "@downloadLogsHeading": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "tokenCreated": "Token created: {token}",
+  "@tokenCreated": {
+    "placeholders": {
+      "token": {}
+    }
+  },
+  "tokenRevoked": "Token revoked: {tokenId}",
+  "@tokenRevoked": {
+    "placeholders": {
+      "tokenId": {}
+    }
+  },
+  "enterTokenIdToRevoke": "Enter token id to revoke",
+  "id": "id",
+  "owner": "owner",
+  "status": "status",
+  "createdAt": "created_at",
+  "expiresAt": "expires_at",
+  "lastUsedAt": "last_used_at",
+  "token": "token",
+  "package": "package",
+  "version": "version",
+  "timestamp": "timestamp",
+  "ip": "ip"
+}
