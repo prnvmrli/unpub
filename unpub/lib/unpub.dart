@@ -4,3 +4,5 @@ export 'src/package_store.dart';
 export 'src/file_store.dart';
 export 'src/app.dart';
 export 'src/models.dart';
+export 'src/token_store.dart';
+export 'src/sqlite_token_store.dart';

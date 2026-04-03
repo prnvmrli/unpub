@@ -8,10 +8,16 @@ main(List<String> args) async {
   var parser = ArgParser();
   parser.addOption('host', abbr: 'h', defaultsTo: '0.0.0.0');
   parser.addOption('port', abbr: 'p', defaultsTo: '4000');
-  parser.addOption('database',
-      abbr: 'd', defaultsTo: 'mongodb://localhost:27017/dart_pub');
+  parser.addOption(
+    'database',
+    abbr: 'd',
+    defaultsTo: 'mongodb://localhost:27017/dart_pub',
+  );
   parser.addOption('proxy-origin', abbr: 'o', defaultsTo: '');
   parser.addOption('web-root', defaultsTo: '');
+  parser.addOption('token-db-path', defaultsTo: '');
+  parser.addOption('admin-emails', defaultsTo: '');
+  parser.addOption('download-token', defaultsTo: '');
 
   var results = parser.parse(args);
 
@@ -20,6 +26,9 @@ main(List<String> args) async {
   var dbUri = results['database'] as String;
   var proxy_origin = results['proxy-origin'] as String;
   var webRoot = results['web-root'] as String;
+  var tokenDbPath = results['token-db-path'] as String;
+  var adminEmailsRaw = results['admin-emails'] as String;
+  var downloadToken = results['download-token'] as String;
 
   if (results.rest.isNotEmpty) {
     print('Got unexpected arguments: "${results.rest.join(' ')}".\n\nUsage:\n');
@@ -32,11 +41,24 @@ main(List<String> args) async {
 
   var baseDir = path.absolute('unpub-packages');
 
+  final normalizedTokenDbPath = tokenDbPath.trim();
+  final tokenStore = normalizedTokenDbPath.isEmpty
+      ? null
+      : unpub.SqliteTokenStore(path.absolute(normalizedTokenDbPath));
+  final adminEmails = adminEmailsRaw
+      .split(',')
+      .map((e) => e.trim())
+      .where((e) => e.isNotEmpty)
+      .toSet();
+
   var app = unpub.App(
     metaStore: unpub.MongoStore(db),
     packageStore: unpub.FileStore(baseDir),
     proxy_origin: proxy_origin.trim().isEmpty ? null : Uri.parse(proxy_origin),
     webRoot: webRoot.trim().isEmpty ? null : path.absolute(webRoot.trim()),
+    downloadToken: downloadToken.trim().isEmpty ? null : downloadToken.trim(),
+    tokenStore: tokenStore,
+    adminEmails: adminEmails,
   );
 
   var server = await app.serve(host, port);
