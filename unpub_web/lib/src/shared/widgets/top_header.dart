@@ -50,11 +50,14 @@ class _TopHeaderState extends State<TopHeader> {
   Widget build(BuildContext context) {
     final isNarrow = MediaQuery.sizeOf(context).width < 920;
     final currentPath = GoRouterState.of(context).uri.path;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Color(0xFF024D96), Color(0xFF0A73C8), Color(0xFF1495DA)],
+          colors: isDark
+              ? const [Color(0xFF0E2B4D), Color(0xFF13406F), Color(0xFF1A568C)]
+              : const [Color(0xFF024D96), Color(0xFF0A73C8), Color(0xFF1495DA)],
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
         ),
@@ -140,7 +143,7 @@ class _ThemeToggleButton extends StatelessWidget {
     final l10n = context.l10n;
     return BlocBuilder<ThemeCubit, ThemeMode>(
       builder: (context, mode) {
-        final isDark = mode == ThemeMode.dark;
+        final isDark = Theme.of(context).brightness == Brightness.dark;
         return IconButton.filledTonal(
           onPressed: () => context.read<ThemeCubit>().toggle(),
           tooltip: isDark ? l10n.switchToLight : l10n.switchToDark,

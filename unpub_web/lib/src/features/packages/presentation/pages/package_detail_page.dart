@@ -35,6 +35,7 @@ class PackageDetailPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final scheme = Theme.of(context).colorScheme;
     return BlocProvider(
       key: ValueKey('detail-$name-$version'),
       create: (_) => PackageDetailCubit(packagesRepository)
@@ -97,10 +98,13 @@ class PackageDetailPage extends StatelessWidget {
                                         vertical: 6,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFFEEF6FF),
+                                        color: scheme.secondaryContainer,
                                         borderRadius: BorderRadius.circular(999),
                                       ),
-                                      child: Text(package.version),
+                                      child: Text(
+                                        package.version,
+                                        style: TextStyle(color: scheme.onSecondaryContainer),
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -149,4 +153,3 @@ class PackageDetailPage extends StatelessWidget {
     );
   }
 }
-

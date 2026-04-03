@@ -32,6 +32,7 @@ class AdminTokensPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final scheme = Theme.of(context).colorScheme;
     return BlocProvider(
       create: (_) => AdminTokensCubit(
         adminRepository: adminRepository,
@@ -166,7 +167,7 @@ class AdminTokensPage extends StatelessWidget {
                         child: Text(
                           feedback,
                           key: ValueKey(feedback),
-                          style: const TextStyle(color: Color(0xFF1E2B3A)),
+                          style: TextStyle(color: scheme.onSurfaceVariant),
                         ),
                       ),
                     ],

@@ -37,6 +37,7 @@ class PackageListPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final scheme = Theme.of(context).colorScheme;
     return BlocProvider(
       key: ValueKey('list-$page-${searchQuery ?? ''}'),
       create: (_) => PackageListCubit(packagesRepository)
@@ -79,9 +80,9 @@ class PackageListPage extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           decoration: BoxDecoration(
-                            color: Colors.white,
+                            color: scheme.surfaceContainer,
                             borderRadius: BorderRadius.circular(999),
-                            border: Border.all(color: const Color(0xFFDDE8F4)),
+                            border: Border.all(color: scheme.outlineVariant),
                           ),
                           child: Text(
                             l10n.packageCount(data.count),
@@ -144,10 +145,13 @@ class PackageListPage extends StatelessWidget {
                                             duration: const Duration(milliseconds: 220),
                                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                             decoration: BoxDecoration(
-                                              color: const Color(0xFFEEF6FF),
+                                              color: scheme.secondaryContainer,
                                               borderRadius: BorderRadius.circular(999),
                                             ),
-                                            child: Text(package.latest),
+                                            child: Text(
+                                              package.latest,
+                                              style: TextStyle(color: scheme.onSecondaryContainer),
+                                            ),
                                           ),
                                         ],
                                       ),
