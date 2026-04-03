@@ -36,7 +36,6 @@ class AdminTokensPage extends StatelessWidget {
     return BlocProvider(
       create: (_) => AdminTokensCubit(
         adminRepository: adminRepository,
-        authSession: authSession,
       )..load(),
       child: AppScaffold(
         authSession: authSession,
@@ -61,8 +60,9 @@ class AdminTokensPage extends StatelessWidget {
                           ),
                         ),
                         OutlinedButton(
-                          onPressed: () {
-                            authSession.logout();
+                          onPressed: () async {
+                            await authSession.logout();
+                            if (!context.mounted) return;
                             context.go('/login');
                           },
                           child: Text(l10n.logout),
@@ -70,7 +70,7 @@ class AdminTokensPage extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Text(l10n.sessionToken(authSession.shortToken)),
+                    Text(l10n.sessionToken(authSession.ownerName ?? 'unknown')),
                     const SizedBox(height: 12),
                     Card(
                       child: Padding(

@@ -1,6 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../../core/auth/auth_session.dart';
 import '../../data/admin_models.dart';
 import '../../data/admin_repository.dart';
 
@@ -56,15 +55,10 @@ class AdminTokensState {
 class AdminTokensCubit extends Cubit<AdminTokensState> {
   AdminTokensCubit({
     required AdminRepository adminRepository,
-    required AuthSession authSession,
-  })  : _adminRepository = adminRepository,
-        _authSession = authSession,
-        super(const AdminTokensState());
+  }) : _adminRepository = adminRepository,
+       super(const AdminTokensState());
 
   final AdminRepository _adminRepository;
-  final AuthSession _authSession;
-
-  String get _sessionToken => _authSession.token ?? '';
 
   void setIncludeAll(bool value) {
     emit(state.copyWith(includeAll: value));
@@ -83,16 +77,12 @@ class AdminTokensCubit extends Cubit<AdminTokensState> {
   }
 
   Future<void> load() async {
-    if (_sessionToken.isEmpty) return;
-
     emit(state.copyWith(loading: true, clearFeedback: true));
     try {
       final tokens = await _adminRepository.listTokens(
-        token: _sessionToken,
         includeAll: state.includeAll,
       );
       final downloads = await _adminRepository.listDownloads(
-        token: _sessionToken,
         includeAll: state.includeAll,
       );
       emit(state.copyWith(
@@ -106,12 +96,9 @@ class AdminTokensCubit extends Cubit<AdminTokensState> {
   }
 
   Future<void> createToken() async {
-    if (_sessionToken.isEmpty) return;
-
     emit(state.copyWith(loading: true, clearFeedback: true));
     try {
       final token = await _adminRepository.createToken(
-        token: _sessionToken,
         ownerName: state.ownerName,
         expiresAt: state.expiresAt,
       );
@@ -128,8 +115,6 @@ class AdminTokensCubit extends Cubit<AdminTokensState> {
   }
 
   Future<void> revokeToken() async {
-    if (_sessionToken.isEmpty) return;
-
     final tokenId = state.revokeTokenId.trim();
     if (tokenId.isEmpty) {
       emit(state.copyWith(notice: const AdminNotice.missingTokenId()));
@@ -139,7 +124,6 @@ class AdminTokensCubit extends Cubit<AdminTokensState> {
     emit(state.copyWith(loading: true, clearFeedback: true));
     try {
       await _adminRepository.revokeToken(
-        token: _sessionToken,
         tokenId: tokenId,
       );
       emit(state.copyWith(

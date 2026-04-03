@@ -20,6 +20,8 @@ abstract class TokenStore {
   Future<bool> revokeToken({required int id, String? ownerName});
 
   Future<List<DownloadRecord>> listDownloads({String? ownerName, int limit});
+
+  Future<String?> ownerByToken(String token);
 }
 
 class ApiKeyRecord {

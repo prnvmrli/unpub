@@ -6,34 +6,57 @@ class AuthSession extends ChangeNotifier {
   AuthSession(this._apiClient);
 
   final ApiClient _apiClient;
-  String? _token;
+  bool _loading = false;
+  String? _ownerName;
 
-  String? get token => _token;
-  bool get isLoggedIn => _token != null && _token!.isNotEmpty;
+  bool get isLoading => _loading;
+  String? get ownerName => _ownerName;
+  bool get isLoggedIn => _ownerName != null && _ownerName!.isNotEmpty;
+  String get shortToken => isLoggedIn ? _ownerName! : 'none';
 
-  String get shortToken {
-    if (!isLoggedIn) return 'none';
-    final value = _token!;
-    if (value.length <= 12) return value;
-    return '${value.substring(0, 6)}...${value.substring(value.length - 4)}';
+  Future<void> restoreSession() async {
+    _loading = true;
+    notifyListeners();
+    try {
+      final response = await _apiClient.get('/auth/me');
+      final data = response['data'] as Map<String, dynamic>;
+      _ownerName = data['owner_name']?.toString();
+    } catch (_) {
+      _ownerName = null;
+    } finally {
+      _loading = false;
+      notifyListeners();
+    }
   }
 
   Future<bool> login(String token) async {
     try {
-      await _apiClient.get(
-        '/admin/tokens/me',
-        headers: {'authorization': 'Bearer $token'},
+      final response = await _apiClient.post(
+        '/auth/login',
+        headers: const {'content-type': 'application/json'},
+        body: {'token': token},
       );
-      _token = token;
+      final data = response['data'] as Map<String, dynamic>;
+      _ownerName = data['owner_name']?.toString();
       notifyListeners();
-      return true;
+      return isLoggedIn;
     } catch (_) {
       return false;
     }
   }
 
-  void logout() {
-    _token = null;
+  Future<void> logout() async {
+    try {
+      await _apiClient.post(
+        '/auth/logout',
+        headers: const {'content-type': 'application/json'},
+        body: const {},
+      );
+    } catch (_) {
+      // ignore
+    }
+    _ownerName = null;
     notifyListeners();
   }
 }
+

@@ -1,5 +1,5 @@
 import 'src/app/unpub_app.dart';
 
-void main() {
-  runUnpubApp();
+Future<void> main() async {
+  await runUnpubApp();
 }

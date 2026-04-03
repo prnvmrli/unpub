@@ -7,8 +7,10 @@ import '../core/theme/theme_cubit.dart';
 import 'app_dependencies.dart';
 import 'app_router.dart';
 
-void runUnpubApp() {
+Future<void> runUnpubApp() async {
+  WidgetsFlutterBinding.ensureInitialized();
   final dependencies = AppDependencies();
+  await dependencies.authSession.restoreSession();
   runApp(UnpubApp(dependencies: dependencies));
 }
 

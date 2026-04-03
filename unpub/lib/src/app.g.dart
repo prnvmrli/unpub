@@ -32,6 +32,9 @@ Router _$AppRouter(App service) {
     r'/api/packages/<name>/uploaders/<email>',
     service.removeUploader,
   );
+  router.add('POST', r'/auth/login', service.login);
+  router.add('GET', r'/auth/me', service.me);
+  router.add('POST', r'/auth/logout', service.logout);
   router.add('POST', r'/admin/tokens', service.createToken);
   router.add('GET', r'/admin/tokens/me', service.listMyTokens);
   router.add('POST', r'/admin/tokens/<id>/revoke', service.revokeToken);
@@ -48,6 +51,7 @@ Router _$AppRouter(App service) {
   router.add('GET', r'/packages/<name>', service.indexHtml);
   router.add('GET', r'/packages/<name>/versions/<version>', service.indexHtml);
   router.add('GET', r'/admin/tokens', service.indexHtml);
+  router.add('GET', r'/login', service.indexHtml);
   router.add('GET', r'/main.dart.js', service.mainDartJs);
   router.add('GET', r'/badge/<type>/<name>', service.badge);
   return router;

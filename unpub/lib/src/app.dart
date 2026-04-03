@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 import 'package:collection/collection.dart' show IterableExtension;
 import 'package:path/path.dart' as path;
@@ -33,6 +34,7 @@ class App {
   static const _versionMetadataPathPattern =
       r'^/api/packages/([^/]+)/versions/(.+)$';
   static const _packageVersionsPathPattern = r'^/packages/([^/]+)\.json$';
+  static const _sessionCookieName = 'unpub_session';
 
   /// meta information store
   final MetaStore metaStore;
@@ -53,6 +55,8 @@ class App {
   final String? downloadToken;
   final TokenStore? tokenStore;
   final Set<String> adminEmails;
+  final Duration sessionTtl;
+  final Map<String, _SessionRecord> _sessions = {};
 
   /// validate if the package can be published
   ///
@@ -75,7 +79,9 @@ class App {
     this.downloadToken,
     this.tokenStore,
     Set<String>? adminEmails,
-  }) : adminEmails = adminEmails ?? <String>{};
+    Duration? sessionTtl,
+  }) : adminEmails = adminEmails ?? <String>{},
+       sessionTtl = sessionTtl ?? const Duration(hours: 12);
 
   static shelf.Response _okWithJson(Map<String, dynamic> data) =>
       shelf.Response.ok(
@@ -100,6 +106,9 @@ class App {
       'error': {'message': message},
     }),
   );
+
+  static shelf.Response _unauthorized([String message = 'unauthorized']) =>
+      _badRequest(message, status: HttpStatus.unauthorized);
 
   http.Client? _googleapisClient;
 
@@ -307,6 +316,101 @@ class App {
     }
 
     return null;
+  }
+
+  String? _cookieValue(shelf.Request req, String name) {
+    final cookieHeader = req.headers[HttpHeaders.cookieHeader];
+    if (cookieHeader == null || cookieHeader.trim().isEmpty) return null;
+
+    for (final part in cookieHeader.split(';')) {
+      final item = part.trim();
+      if (!item.startsWith('$name=')) continue;
+      return Uri.decodeComponent(item.substring(name.length + 1));
+    }
+    return null;
+  }
+
+  String _newSessionId() {
+    final random = Random.secure();
+    final bytes = List<int>.generate(32, (_) => random.nextInt(256));
+    return base64Url.encode(bytes).replaceAll('=', '');
+  }
+
+  _SessionRecord? _activeSession(shelf.Request req) {
+    final sessionId = _cookieValue(req, _sessionCookieName);
+    if (sessionId == null || sessionId.isEmpty) return null;
+
+    final session = _sessions[sessionId];
+    if (session == null) return null;
+    if (session.expiresAt.isBefore(DateTime.now().toUtc())) {
+      _sessions.remove(sessionId);
+      return null;
+    }
+    return session;
+  }
+
+  Future<_OperatorIdentity?> _operatorFromBearerToken(
+    shelf.Request req,
+  ) async {
+    final token = _extractDownloadToken(req);
+    if (token == null) return null;
+
+    if (tokenStore != null && await tokenStore!.isValidToken(token)) {
+      final owner =
+          await tokenStore!.ownerByToken(token) ?? 'token-user';
+      return _OperatorIdentity(ownerName: owner, token: token);
+    }
+    final configuredToken = downloadToken?.trim();
+    if (configuredToken != null &&
+        configuredToken.isNotEmpty &&
+        configuredToken == token) {
+      return _OperatorIdentity(ownerName: 'static-token-user', token: token);
+    }
+    return null;
+  }
+
+  Future<_OperatorIdentity?> _operatorFromGoogleAccessToken(
+    shelf.Request req,
+  ) async {
+    try {
+      final uploaderEmail = await _getUploaderEmail(req);
+      return _OperatorIdentity(ownerName: uploaderEmail, token: null);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<_OperatorIdentity?> _authenticateOperator(
+    shelf.Request req,
+  ) async {
+    final session = _activeSession(req);
+    if (session != null) {
+      return _OperatorIdentity(ownerName: session.ownerName, token: session.token);
+    }
+
+    final bearerIdentity = await _operatorFromBearerToken(req);
+    if (bearerIdentity != null) return bearerIdentity;
+
+    return _operatorFromGoogleAccessToken(req);
+  }
+
+  shelf.Response _withSessionCookie(
+    shelf.Response res, {
+    required String sessionId,
+  }) {
+    final cookie =
+        '$_sessionCookieName=$sessionId; Path=/; HttpOnly; SameSite=Lax; Max-Age=${sessionTtl.inSeconds}';
+    return res.change(
+      headers: {...res.headers, HttpHeaders.setCookieHeader: cookie},
+    );
+  }
+
+  shelf.Response _clearSessionCookie(shelf.Response res) {
+    final cookie =
+        '$_sessionCookieName=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0';
+    return res.change(
+      headers: {...res.headers, HttpHeaders.setCookieHeader: cookie},
+    );
   }
 
   void _logDownloadAccess({
@@ -690,6 +794,69 @@ class App {
 
   bool _isAdmin(String email) => adminEmails.contains(email);
 
+  @Route.post('/auth/login')
+  Future<shelf.Response> login(shelf.Request req) async {
+    final bodyRaw = await req.readAsString();
+    final body = bodyRaw.trim().isEmpty
+        ? <String, dynamic>{}
+        : (json.decode(bodyRaw) as Map<String, dynamic>);
+    final token = body['token']?.toString().trim();
+    if (token == null || token.isEmpty) {
+      return _unauthorized('invalid credentials');
+    }
+
+    String? ownerName;
+    if (tokenStore != null) {
+      final valid = await tokenStore!.isValidToken(token);
+      if (!valid) return _unauthorized('invalid credentials');
+      ownerName = await tokenStore!.ownerByToken(token) ?? 'token-user';
+      await tokenStore!.markTokenUsed(token);
+    } else {
+      final configuredToken = downloadToken?.trim();
+      if (configuredToken == null ||
+          configuredToken.isEmpty ||
+          configuredToken != token) {
+        return _unauthorized('invalid credentials');
+      }
+      ownerName = 'static-token-user';
+    }
+
+    final sessionId = _newSessionId();
+    _sessions[sessionId] = _SessionRecord(
+      sessionId: sessionId,
+      ownerName: ownerName,
+      token: token,
+      expiresAt: DateTime.now().toUtc().add(sessionTtl),
+    );
+
+    return _withSessionCookie(
+      _okWithJson({
+        'data': {'owner_name': ownerName},
+      }),
+      sessionId: sessionId,
+    );
+  }
+
+  @Route.get('/auth/me')
+  Future<shelf.Response> me(shelf.Request req) async {
+    final session = _activeSession(req);
+    if (session == null) {
+      return _unauthorized('not logged in');
+    }
+    return _okWithJson({
+      'data': {'owner_name': session.ownerName},
+    });
+  }
+
+  @Route.post('/auth/logout')
+  Future<shelf.Response> logout(shelf.Request req) async {
+    final session = _activeSession(req);
+    if (session != null) {
+      _sessions.remove(session.sessionId);
+    }
+    return _clearSessionCookie(_successMessage('logged out'));
+  }
+
   @Route.post('/admin/tokens')
   Future<shelf.Response> createToken(shelf.Request req) async {
     if (tokenStore == null) {
@@ -699,7 +866,9 @@ class App {
       );
     }
 
-    final operatorEmail = await _getUploaderEmail(req);
+    final operator = await _authenticateOperator(req);
+    if (operator == null) return _unauthorized();
+    final operatorEmail = operator.ownerName;
     final bodyRaw = await req.readAsString();
     final body = bodyRaw.trim().isEmpty
         ? <String, dynamic>{}
@@ -738,7 +907,9 @@ class App {
       );
     }
 
-    final operatorEmail = await _getUploaderEmail(req);
+    final operator = await _authenticateOperator(req);
+    if (operator == null) return _unauthorized();
+    final operatorEmail = operator.ownerName;
     final includeAll = req.requestedUri.queryParameters['all'] == '1';
     final canListAll = includeAll && _isAdmin(operatorEmail);
     final tokens = await tokenStore!.listTokens(
@@ -763,7 +934,9 @@ class App {
       return _badRequest('invalid token id');
     }
 
-    final operatorEmail = await _getUploaderEmail(req);
+    final operator = await _authenticateOperator(req);
+    if (operator == null) return _unauthorized();
+    final operatorEmail = operator.ownerName;
     final revoked = await tokenStore!.revokeToken(
       id: tokenId,
       ownerName: _isAdmin(operatorEmail) ? null : operatorEmail,
@@ -784,7 +957,9 @@ class App {
       );
     }
 
-    final operatorEmail = await _getUploaderEmail(req);
+    final operator = await _authenticateOperator(req);
+    if (operator == null) return _unauthorized();
+    final operatorEmail = operator.ownerName;
     final includeAll = req.requestedUri.queryParameters['all'] == '1';
     final canListAll = includeAll && _isAdmin(operatorEmail);
     final limit = int.tryParse(req.requestedUri.queryParameters['limit'] ?? '');
@@ -934,6 +1109,7 @@ class App {
   @Route.get('/packages/<name>')
   @Route.get('/packages/<name>/versions/<version>')
   @Route.get('/admin/tokens')
+  @Route.get('/login')
   Future<shelf.Response> indexHtml(shelf.Request req) async {
     final webAsset = await _serveWebAsset('index.html');
     if (webAsset != null) return webAsset;
@@ -1024,5 +1200,29 @@ class _ProtectedResource {
     required this.kind,
     required this.packageName,
     required this.version,
+  });
+}
+
+class _SessionRecord {
+  final String sessionId;
+  final String ownerName;
+  final String token;
+  final DateTime expiresAt;
+
+  _SessionRecord({
+    required this.sessionId,
+    required this.ownerName,
+    required this.token,
+    required this.expiresAt,
+  });
+}
+
+class _OperatorIdentity {
+  final String ownerName;
+  final String? token;
+
+  _OperatorIdentity({
+    required this.ownerName,
+    required this.token,
   });
 }

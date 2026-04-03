@@ -196,6 +196,23 @@ class SqliteTokenStore implements TokenStore {
         .toList();
   }
 
+  @override
+  Future<String?> ownerByToken(String token) async {
+    final rows = _db.select(
+      '''
+      SELECT owner_name
+      FROM api_keys
+      WHERE token = ?
+        AND status = 'active'
+        AND (expires_at IS NULL OR datetime(expires_at) > datetime('now'))
+      LIMIT 1
+      ''',
+      [token],
+    );
+    if (rows.isEmpty) return null;
+    return rows.first['owner_name'] as String;
+  }
+
   ApiKeyRecord _fromRow(Row row) {
     return ApiKeyRecord(
       id: row['id'] as int,

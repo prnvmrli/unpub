@@ -86,7 +86,17 @@ fvm dart run unpub/tool/revoke_token.dart \
   --token your-token-value
 ```
 
-Admin API (requires logged-in user via existing auth flow):
+Web dashboard session auth:
+
+- `POST /auth/login`
+  - Body: `{"token":"<api-token>"}`
+  - Sets an `HttpOnly` session cookie (`unpub_session`).
+- `GET /auth/me`
+  - Returns current session identity.
+- `POST /auth/logout`
+  - Clears current session cookie.
+
+Admin API (accepts either session cookie or Authorization bearer token):
 
 - `POST /admin/tokens`
   - Body: `{"owner_name":"user@company.com","expires_at":"2027-01-01T00:00:00Z"}`
