@@ -24,6 +24,79 @@ flutter build web --project-dir unpub_web
 unpub --database mongodb://localhost:27017/dart_pub --web-root unpub_web/build/web
 ```
 
+To require API key auth (from SQL) for package and metadata endpoints:
+
+```sh
+unpub --database mongodb://localhost:27017/dart_pub \
+  --token-db-path ./unpub-tokens.db \
+  --admin-emails admin@company.com,platform@company.com
+```
+
+Clients must send the token via `Authorization: Bearer <token>` (for example via `dart pub token add` / `pub-tokens.json`).
+Protected endpoints include:
+- `/packages/<name>/versions/<version>.tar.gz`
+- `/api/packages/<name>`
+- `/api/packages/<name>/versions/<version>`
+- `/packages/<name>.json`
+
+The token database uses these tables:
+
+```sql
+CREATE TABLE api_keys (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  token TEXT NOT NULL UNIQUE,
+  owner_name TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active', -- active / revoked
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expires_at TEXT,
+  last_used_at TEXT
+);
+
+CREATE TABLE downloads (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  token TEXT NOT NULL,
+  "package" TEXT NOT NULL,
+  version TEXT NOT NULL,
+  timestamp TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  ip_address TEXT
+);
+```
+
+Example token insert:
+
+```sql
+INSERT INTO api_keys (token, owner_name, status, expires_at)
+VALUES ('my-secret-token', 'ci-bot', 'active', '2027-01-01 00:00:00');
+```
+
+`downloads` rows are written on authorized download requests.
+
+Admin scripts:
+
+```sh
+# create active token (auto-generated token value)
+fvm dart run unpub/tool/create_token.dart \
+  --db-path ./unpub-tokens.db \
+  --owner ci-bot \
+  --expires-at 2027-01-01T00:00:00Z
+
+# revoke token
+fvm dart run unpub/tool/revoke_token.dart \
+  --db-path ./unpub-tokens.db \
+  --token your-token-value
+```
+
+Admin API (requires logged-in user via existing auth flow):
+
+- `POST /admin/tokens`
+  - Body: `{"owner_name":"user@company.com","expires_at":"2027-01-01T00:00:00Z"}`
+  - Non-admin users can only create tokens for themselves.
+- `GET /admin/tokens/me`
+  - Returns caller-owned tokens.
+  - Admins can pass `?all=1` to list all.
+- `POST /admin/tokens/<id>/revoke`
+  - Non-admin users can revoke only their own tokens.
+
 Unpub use mongodb as meta information store and file system as package(tarball) store by default.
 
 Dart API is also available for further customization.
