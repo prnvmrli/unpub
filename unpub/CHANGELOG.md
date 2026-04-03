@@ -1,3 +1,9 @@
+## 2.0.1
+
+- Migrate frontend experience to Flutter web (`unpub_web`) and integrate serving with the unpub backend.
+- Add HTTP integration test coverage for upload and metadata fetch flows.
+- Upgrade core dependencies for Dart 3.11 compatibility (including `http 1.x`, `archive 4.x`, `googleapis 16.x`, and `mime 2.x`).
+
 ## 2.0.0
 
 - Supports NNBD
