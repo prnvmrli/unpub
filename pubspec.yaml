@@ -1,0 +1,29 @@
+name: unpub_workspace
+publish_to: none
+
+environment:
+  sdk: "^3.11.4"
+
+dev_dependencies:
+  melos: ^7.5.0
+
+workspace:
+  - unpub
+  - unpub/lib/unpub_api
+  - unpub_auth
+  - unpub_aws
+  - unpub_web
+
+melos:
+  command:
+    bootstrap:
+      usePubspecOverrides: false
+  scripts:
+    analyze:
+      run: >
+        dart run melos exec --ignore="unpub_web" -- "dart analyze" &&
+        dart run melos exec --scope="unpub_web" -- "flutter analyze"
+      description: Analyze all packages (Dart + Flutter).
+    test:
+      run: dart run melos exec --ignore="unpub_web" --dir-exists="test" -- "dart test"
+      description: Run Dart tests across non-Flutter packages.

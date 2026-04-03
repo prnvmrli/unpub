@@ -1,7 +1,9 @@
 name: unpub_api
+version: 0.1.0
 
 environment:
-  sdk: ">=3.0.0 <4.0.0"
+  sdk: "^3.11.4"
+resolution: workspace
 
 dependencies:
   json_annotation: ^4.9.0

@@ -1,9 +1,19 @@
 # Files and directories created by pub.
 */.dart_tool/
 */.packages
+/.dart_tool/
 
 # Conventional directory for build output.
 */build/
 
 # pubspec.lock
 */pubspec.lock
+/pubspec.lock
+
+# FVM Version Cache
+.fvm/
+
+# IDE / generated project files
+.idea/
+*.iml
+.vscode/settings.json
