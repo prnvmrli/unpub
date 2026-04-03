@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:cli';
+import 'dart:typed_data';
 import 'dart:io';
 
 import 'package:minio/minio.dart';
@@ -19,11 +19,11 @@ class S3Store extends PackageStore {
 
   S3Store(this.bucketName,
       {this.region,
-        this.getObjectPath,
-        this.endpoint,
-        this.credentials,
-        this.minio, this.environment}) {
-
+      this.getObjectPath,
+      this.endpoint,
+      this.credentials,
+      this.minio,
+      this.environment}) {
     final env = environment ?? Platform.environment;
 
     // Check for env vars or container credentials if none were provided.
@@ -51,12 +51,14 @@ class S3Store extends PackageStore {
 
   @override
   Future<void> upload(String name, String version, List<int> content) async {
-    await minio!.putObject(
-        bucketName, _getObjectKey(name, version), Stream.value(content));
+    await minio!.putObject(bucketName, _getObjectKey(name, version),
+        Stream.value(Uint8List.fromList(content)));
   }
 
   @override
   Stream<List<int>> download(String name, String version) {
-    return waitFor(minio!.getObject(bucketName, _getObjectKey(name, version)));
+    return Stream.fromFuture(
+            minio!.getObject(bucketName, _getObjectKey(name, version)))
+        .asyncExpand((stream) => stream);
   }
 }

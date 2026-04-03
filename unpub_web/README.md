@@ -1,7 +1,13 @@
 # unpub_web
 
-A web app that uses [AngularDart](https://webdev.dartlang.org/angular) and
-[AngularDart Components](https://webdev.dartlang.org/components).
+Flutter web frontend for unpub.
 
-Created from templates made available by Stagehand under a BSD-style
-[license](https://github.com/dart-lang/stagehand/blob/master/LICENSE).
+## Build
+
+```bash
+flutter build web
+```
+
+The build output is written to `build/web`. Configure `unpub` with
+`--web-root` pointing to that directory so the API server can serve the
+Flutter app and its assets.

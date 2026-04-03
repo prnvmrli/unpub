@@ -17,6 +17,13 @@ pub global activate unpub
 unpub --database mongodb://localhost:27017/dart_pub # Replace this with production database uri
 ```
 
+To serve a Flutter web frontend built from `unpub_web`:
+
+```sh
+flutter build web --project-dir unpub_web
+unpub --database mongodb://localhost:27017/dart_pub --web-root unpub_web/build/web
+```
+
 Unpub use mongodb as meta information store and file system as package(tarball) store by default.
 
 Dart API is also available for further customization.
@@ -50,6 +57,7 @@ main(List<String> args) async {
 | `upstream` | Upstream url | https://pub.dev |
 | `googleapisProxy` | Http(s) proxy to call googleapis (to get uploader email) | - |
 | `uploadValidator` | See [Package validator](#package-validator) | - |
+| `webRoot` | Local directory of built Flutter web assets | - |
 
 
 ### Usage behind reverse-proxy

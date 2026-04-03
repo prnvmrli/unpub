@@ -3,11 +3,6 @@ import 'package:http_multi_server/http_multi_server.dart';
 import 'package:path/path.dart' as path;
 
 class Utils {
-  static bool _verbose = false;
-  static void enableVerbose() => _verbose = true;
-  static bool _silence = false;
-  static void enableSilence() => _silence = true;
-
   static final credentialsFilePath =
       path.join(Utils.dartConfigDir, r'unpub-credentials.json');
 

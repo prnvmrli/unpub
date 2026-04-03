@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:collection/collection.dart' show IterableExtension;
+import 'package:path/path.dart' as path;
 import 'package:shelf/shelf.dart' as shelf;
 import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:http/http.dart' as http;
@@ -40,6 +42,7 @@ class App {
 
   /// A forward proxy uri
   final Uri? proxy_origin;
+  final String? webRoot;
 
   /// validate if the package can be published
   ///
@@ -55,6 +58,7 @@ class App {
     this.overrideUploaderEmail,
     this.uploadValidator,
     this.proxy_origin,
+    this.webRoot,
   });
 
   static shelf.Response _okWithJson(Map<String, dynamic> data) =>
@@ -122,6 +126,10 @@ class App {
         .addMiddleware(corsHeaders())
         .addMiddleware(shelf.logRequests())
         .addHandler((req) async {
+      final flutterAsset = await _tryServeFlutterAsset(req);
+      if (flutterAsset != null) {
+        return flutterAsset;
+      }
       // Return 404 by default
       // https://github.com/google/dart-neats/issues/1
       var res = await router.call(req);
@@ -135,7 +143,8 @@ class App {
     var name = item.pubspec['name'] as String;
     var version = item.version;
     return {
-      'archive_url': _resolveUrl(req, '/packages/$name/versions/$version.tar.gz'),
+      'archive_url':
+          _resolveUrl(req, '/packages/$name/versions/$version.tar.gz'),
       'pubspec': item.pubspec,
       'version': version,
     };
@@ -145,6 +154,58 @@ class App {
     var ua = req.headers[HttpHeaders.userAgentHeader];
     print(ua);
     return ua != null && ua.toLowerCase().contains('dart pub');
+  }
+
+  File? _webFile(String relativePath) {
+    if (webRoot == null) return null;
+    final cleanPath =
+        relativePath.startsWith('/') ? relativePath.substring(1) : relativePath;
+    final file = File(path.join(webRoot!, cleanPath));
+    return file.existsSync() ? file : null;
+  }
+
+  Future<shelf.Response?> _serveWebAsset(String relativePath) async {
+    final file = _webFile(relativePath);
+    if (file == null) return null;
+
+    final contentType =
+        lookupMimeType(file.path) ?? ContentType.binary.mimeType;
+    return shelf.Response.ok(
+      file.openRead(),
+      headers: {HttpHeaders.contentTypeHeader: contentType},
+    );
+  }
+
+  Future<shelf.Response?> _tryServeFlutterAsset(shelf.Request req) async {
+    var path = req.requestedUri.path;
+    if (path.startsWith('/')) {
+      path = path.substring(1);
+    }
+    if (path.isEmpty) return null;
+
+    const topLevelAssets = <String>{
+      'flutter.js',
+      'flutter_bootstrap.js',
+      'flutter_service_worker.js',
+      'manifest.json',
+      'version.json',
+      'favicon.ico',
+      'favicon.png',
+      'main.dart.js',
+      'main.dart.js.map',
+    };
+
+    if (topLevelAssets.contains(path)) {
+      return _serveWebAsset(path);
+    }
+
+    if (path.startsWith('assets/') ||
+        path.startsWith('icons/') ||
+        path.startsWith('canvaskit/')) {
+      return _serveWebAsset(path);
+    }
+
+    return null;
   }
 
   Router get router => _$AppRouter(this);
@@ -163,9 +224,8 @@ class App {
           semver.Version.parse(a.version), semver.Version.parse(b.version));
     });
 
-    var versionMaps = package.versions
-        .map((item) => _versionToJson(item, req))
-        .toList();
+    var versionMaps =
+        package.versions.map((item) => _versionToJson(item, req)).toList();
 
     return _okWithJson({
       'name': name,
@@ -228,8 +288,7 @@ class App {
   @Route.get('/api/packages/versions/new')
   Future<shelf.Response> getUploadUrl(shelf.Request req) async {
     return _okWithJson({
-      'url': _resolveUrl(req, '/api/packages/versions/newUpload')
-          .toString(),
+      'url': _resolveUrl(req, '/api/packages/versions/newUpload').toString(),
       'fields': {},
     });
   }
@@ -342,9 +401,11 @@ class App {
       await metaStore.addVersion(name, unpubVersion);
 
       // TODO: Upload docs
-      return shelf.Response.found(_resolveUrl(req, '/api/packages/versions/newUploadFinish'));
+      return shelf.Response.found(
+          _resolveUrl(req, '/api/packages/versions/newUploadFinish'));
     } catch (err) {
-      return shelf.Response.found(_resolveUrl(req, '/api/packages/versions/newUploadFinish?error=$err'));
+      return shelf.Response.found(_resolveUrl(
+          req, '/api/packages/versions/newUploadFinish?error=$err'));
     }
   }
 
@@ -525,12 +586,16 @@ class App {
   @Route.get('/packages/<name>')
   @Route.get('/packages/<name>/versions/<version>')
   Future<shelf.Response> indexHtml(shelf.Request req) async {
+    final webAsset = await _serveWebAsset('index.html');
+    if (webAsset != null) return webAsset;
     return shelf.Response.ok(index_html.content,
         headers: {HttpHeaders.contentTypeHeader: ContentType.html.mimeType});
   }
 
   @Route.get('/main.dart.js')
   Future<shelf.Response> mainDartJs(shelf.Request req) async {
+    final webAsset = await _serveWebAsset('main.dart.js');
+    if (webAsset != null) return webAsset;
     return shelf.Response.ok(main_dart_js.content,
         headers: {HttpHeaders.contentTypeHeader: 'text/javascript'});
   }

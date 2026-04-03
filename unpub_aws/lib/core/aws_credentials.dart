@@ -1,4 +1,3 @@
-import 'dart:cli';
 import 'dart:io';
 import 'dart:convert';
 
@@ -17,7 +16,6 @@ class AwsCredentials {
       this.awsSessionToken,
       this.environment,
       this.containerCredentials}) {
-
     final env = environment ?? Platform.environment;
     environment ??= Platform.environment;
     awsAccessKeyId = awsAccessKeyId ?? env['AWS_ACCESS_KEY_ID'];
@@ -27,7 +25,7 @@ class AwsCredentials {
 
     if ((isInContainer != null || containerCredentials != null) &&
         (awsAccessKeyId == null && awsSecretAccessKey == null)) {
-      var data = containerCredentials ?? waitFor(getContainerCredentials(env));
+      var data = containerCredentials;
       if (data != null) {
         awsAccessKeyId = data['AccessKeyId'];
         awsSecretAccessKey = data['SecretAccessKey'];
@@ -52,5 +50,6 @@ class AwsCredentials {
     } catch (e) {
       print('failed to get container credentials.');
     }
+    return null;
   }
 }
