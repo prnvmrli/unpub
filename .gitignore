@@ -20,3 +20,6 @@
 
 # Local runtime package storage
 unpub-packages/
+
+# Local token DB
+unpub-tokens.db
