@@ -1,6 +1,6 @@
 name: unpub_web
 description: Flutter web frontend for unpub.
-version: 1.1.0
+version: 1.1.1
 publish_to: none
 environment:
   sdk: "^3.11.4"

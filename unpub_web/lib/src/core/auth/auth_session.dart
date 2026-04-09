@@ -32,19 +32,6 @@ class AuthSession extends ChangeNotifier {
     }
   }
 
-  Future<bool> login(String token) => loginWithToken(token);
-
-  Future<bool> loginWithToken(String token) async {
-    try {
-      final response = await _apiClient.login(token: token);
-      _applySessionData(response['data'] as Map<String, dynamic>);
-      notifyListeners();
-      return isLoggedIn;
-    } catch (_) {
-      return false;
-    }
-  }
-
   Future<bool> loginWithPassword({
     required String email,
     required String password,

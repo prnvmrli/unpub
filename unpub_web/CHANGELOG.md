@@ -1,3 +1,9 @@
+## 1.1.1
+
+- Remove bearer-token login path from the frontend and enforce email/password session login only.
+- Simplify login state/UI to a single session-auth flow.
+- Update login cubit tests to match password-only authentication.
+
 ## 1.1.0
 
 - Add configurable HTTP API client with cookie-based browser credentials and typed auth/token methods.

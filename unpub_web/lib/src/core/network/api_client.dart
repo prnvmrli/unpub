@@ -37,23 +37,13 @@ class ApiClient {
   }
 
   Future<Map<String, dynamic>> login({
-    String? email,
-    String? password,
-    String? token,
+    required String email,
+    required String password,
   }) {
-    if (email != null &&
-        email.trim().isNotEmpty &&
-        password != null &&
-        password.isNotEmpty) {
-      return post(
-        '/auth/login',
-        body: {'email': email.trim(), 'password': password},
-      );
-    }
-    if (token != null && token.trim().isNotEmpty) {
-      return post('/auth/login', body: {'token': token.trim()});
-    }
-    throw ArgumentError('Provide email+password or token');
+    return post(
+      '/auth/login',
+      body: {'email': email.trim(), 'password': password},
+    );
   }
 
   Future<Map<String, dynamic>> getCurrentUser() => get('/auth/me');

@@ -59,56 +59,25 @@ class LoginPage extends StatelessWidget {
                               l10n.login,
                               style: Theme.of(context).textTheme.headlineMedium,
                             ),
-                            const SizedBox(height: 10),
-                            SegmentedButton<bool>(
-                              segments: const [
-                                ButtonSegment<bool>(
-                                  value: true,
-                                  label: Text('Email + Password'),
-                                ),
-                                ButtonSegment<bool>(
-                                  value: false,
-                                  label: Text('Bearer Token'),
-                                ),
-                              ],
-                              selected: {state.usePasswordLogin},
-                              onSelectionChanged: (selection) {
-                                cubit.setUsePasswordLogin(selection.first);
-                              },
+                            const SizedBox(height: 12),
+                            TextField(
+                              onChanged: cubit.onEmailChanged,
+                              onSubmitted: (_) => cubit.login(),
+                              decoration: const InputDecoration(
+                                labelText: 'Email',
+                                border: OutlineInputBorder(),
+                              ),
                             ),
                             const SizedBox(height: 12),
-                            if (state.usePasswordLogin) ...[
-                              TextField(
-                                onChanged: cubit.onEmailChanged,
-                                onSubmitted: (_) => cubit.login(),
-                                decoration: const InputDecoration(
-                                  labelText: 'Email',
-                                  border: OutlineInputBorder(),
-                                ),
+                            TextField(
+                              obscureText: true,
+                              onChanged: cubit.onPasswordChanged,
+                              onSubmitted: (_) => cubit.login(),
+                              decoration: const InputDecoration(
+                                labelText: 'Password',
+                                border: OutlineInputBorder(),
                               ),
-                              const SizedBox(height: 12),
-                              TextField(
-                                obscureText: true,
-                                onChanged: cubit.onPasswordChanged,
-                                onSubmitted: (_) => cubit.login(),
-                                decoration: const InputDecoration(
-                                  labelText: 'Password',
-                                  border: OutlineInputBorder(),
-                                ),
-                              ),
-                            ] else ...[
-                              Text(l10n.pasteBearerToken),
-                              const SizedBox(height: 12),
-                              TextField(
-                                obscureText: true,
-                                onChanged: cubit.onTokenChanged,
-                                onSubmitted: (_) => cubit.login(),
-                                decoration: InputDecoration(
-                                  labelText: l10n.bearerToken,
-                                  border: const OutlineInputBorder(),
-                                ),
-                              ),
-                            ],
+                            ),
                             if (errorText != null) ...[
                               const SizedBox(height: 10),
                               Text(
@@ -144,9 +113,7 @@ class LoginPage extends StatelessWidget {
     switch (errorType) {
       case LoginErrorType.emptyCredentials:
         return 'Enter email and password';
-      case LoginErrorType.emptyToken:
-        return l10n.enterBearerToken;
-      case LoginErrorType.invalidToken:
+      case LoginErrorType.invalidCredentials:
         return l10n.invalidTokenUnauthorized;
       case null:
         return null;
