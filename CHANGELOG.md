@@ -20,6 +20,8 @@ All notable changes to this repository are documented in this file.
 - Updated package docs/examples (`unpub`, `unpub_aws`) to PostgreSQL usage.
 - Refocused `unpub_aws/docker-compose.yml` to AWS-specific local infra (`mock_s3`) only.
 - Modernized integration tests to use direct HTTP upload/uploader flows instead of deprecated `dart pub` command behaviors.
+- Fixed PostgreSQL token-store trigger bootstrap query sequencing during startup.
+- Removed bearer-token login in `unpub_web` and aligned dashboard auth to session-cookie flow only.
 
 ## 2026-04-03
 
