@@ -39,6 +39,8 @@ Router _$AppRouter(App service) {
   router.add('GET', r'/admin/tokens/me', service.listMyTokens);
   router.add('POST', r'/admin/tokens/<id>/revoke', service.revokeToken);
   router.add('GET', r'/admin/downloads', service.listDownloads);
+  router.add('GET', r'/admin/users', service.listUsers);
+  router.add('POST', r'/admin/users/<id>/disable', service.disableUser);
   router.add('GET', r'/webapi/packages', service.getPackages);
   router.add('GET', r'/packages/<name>.json', service.getPackageVersions);
   router.add(

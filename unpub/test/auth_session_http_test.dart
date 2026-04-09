@@ -16,8 +16,9 @@ void main() {
 
   setUpAll(() async {
     db = await openTestDb(databaseName: 'dart_pub_test_auth');
-    await db.query('DROP TABLE IF EXISTS downloads');
-    await db.query('DROP TABLE IF EXISTS api_keys');
+    await db.query('DROP TABLE IF EXISTS download_logs');
+    await db.query('DROP TABLE IF EXISTS tokens');
+    await db.query('DROP TABLE IF EXISTS users');
     tokenStore = unpub.PostgreSqlTokenStore(db);
 
     final app = unpub.App(
@@ -32,14 +33,16 @@ void main() {
 
   tearDownAll(() async {
     await server.close(force: true);
-    await db.query('DROP TABLE IF EXISTS downloads');
-    await db.query('DROP TABLE IF EXISTS api_keys');
+    await db.query('DROP TABLE IF EXISTS download_logs');
+    await db.query('DROP TABLE IF EXISTS tokens');
+    await db.query('DROP TABLE IF EXISTS users');
     await db.close();
   });
 
   test('session login/me/logout and admin access over cookie', () async {
     final created = await tokenStore.createToken(
       ownerName: 'admin@example.com',
+      name: 'admin-session-token',
     );
 
     final loginRes = await http.post(
@@ -89,6 +92,7 @@ void main() {
   test('admin API still supports bearer token auth', () async {
     final created = await tokenStore.createToken(
       ownerName: 'owner@example.com',
+      name: 'owner-bearer-token',
     );
     final tokensRes = await http.get(
       baseUri.resolve('/admin/tokens/me'),
@@ -100,6 +104,7 @@ void main() {
   test('metadata and tarball routes require bearer token', () async {
     final created = await tokenStore.createToken(
       ownerName: 'pkg-user@example.com',
+      name: 'pkg-user-token',
     );
 
     final unauthorizedMeta = await http.get(
@@ -138,6 +143,7 @@ void main() {
   test('session cookie cannot access protected metadata endpoints', () async {
     final created = await tokenStore.createToken(
       ownerName: 'meta-user@example.com',
+      name: 'meta-user-token',
     );
 
     final loginRes = await http.post(

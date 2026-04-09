@@ -1,3 +1,13 @@
+## 3.1.0
+
+- Add secure token model with `token_prefix + token_hash` storage and SHA-256 verification.
+- Add token permissions (`can_download`, `can_publish`), token expiry, and revoke semantics.
+- Add PostgreSQL-backed users/tokens/download_logs schema with role support and user-disable token revocation trigger.
+- Add session-based auth endpoints with bcrypt email/password login support (`/auth/login`, `/auth/me`, `/auth/logout`).
+- Add admin user management APIs (`/admin/users`, `/admin/users/<id>/disable`).
+- Add stricter middleware authorization for download/publish flows with proper `403` permission responses.
+- Update token CLI tooling to align with new secure token schema.
+
 ## 3.0.0
 
 - Replace MongoDB metadata storage with PostgreSQL-backed metadata storage.

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:postgres/postgres.dart';
 
 PostgreSQLConnection createPostgreSqlConnection(String connectionUri) {
@@ -48,4 +50,58 @@ Future<PostgreSQLConnection> openPostgreSqlConnection(
   final connection = createPostgreSqlConnection(connectionUri);
   await connection.open();
   return connection;
+}
+
+PostgreSQLConnection createPostgreSqlConnectionFromEnv({
+  Map<String, String>? env,
+}) {
+  final source = env ?? Platform.environment;
+  final host = source['PGHOST']?.trim();
+  final portRaw = source['PGPORT']?.trim();
+  final database = source['PGDATABASE']?.trim();
+  final username = source['PGUSER']?.trim();
+  final password = source['PGPASSWORD']?.trim();
+
+  if (host == null || host.isEmpty) {
+    throw ArgumentError('Missing PGHOST');
+  }
+  if (database == null || database.isEmpty) {
+    throw ArgumentError('Missing PGDATABASE');
+  }
+  if (username == null || username.isEmpty) {
+    throw ArgumentError('Missing PGUSER');
+  }
+  if (password == null || password.isEmpty) {
+    throw ArgumentError('Missing PGPASSWORD');
+  }
+
+  final port = int.tryParse(portRaw ?? '');
+  if (port == null) {
+    throw ArgumentError('Invalid or missing PGPORT');
+  }
+
+  return PostgreSQLConnection(
+    host,
+    port,
+    database,
+    username: username,
+    password: password,
+    timeZone: 'UTC',
+  );
+}
+
+Future<PostgreSQLConnection> openPostgreSqlConnectionFromEnv({
+  Map<String, String>? env,
+}) async {
+  final connection = createPostgreSqlConnectionFromEnv(env: env);
+  await connection.open();
+  return connection;
+}
+
+Future<List<PostgreSQLResultRow>> runPostgreSqlQuery({
+  required PostgreSQLConnection connection,
+  required String sql,
+  Map<String, dynamic>? params,
+}) {
+  return connection.query(sql, substitutionValues: params);
 }

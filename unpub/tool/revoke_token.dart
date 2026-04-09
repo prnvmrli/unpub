@@ -1,8 +1,8 @@
 import 'dart:io';
 
 import 'package:args/args.dart';
-import 'package:postgres/postgres.dart';
 import 'package:unpub/src/postgresql_connection.dart';
+import 'package:unpub/src/postgresql_token_store.dart';
 
 Future<void> main(List<String> args) async {
   final parser = ArgParser()
@@ -22,49 +22,24 @@ Future<void> main(List<String> args) async {
   final dbUri = (results['database'] as String).trim();
   final db = await openPostgreSqlConnection(dbUri);
   try {
-    await _ensureSchema(db);
-    final existing = await db.query(
-      'SELECT id, status FROM api_keys WHERE token = @token LIMIT 1',
-      substitutionValues: {'token': token},
-    );
-    if (existing.isEmpty) {
+    final tokenStore = PostgreSqlTokenStore(db);
+    final validated = await tokenStore.validateToken(token);
+    if (validated == null) {
+      stderr.writeln('Token not found or already invalid');
+      exit(3);
+    }
+
+    final revoked = await tokenStore.revokeToken(id: validated.tokenId);
+    if (!revoked) {
       stderr.writeln('Token not found');
       exit(3);
     }
 
-    await db.query(
-      '''
-      UPDATE api_keys
-      SET status = 'revoked'
-      WHERE token = @token
-      ''',
-      substitutionValues: {'token': token},
-    );
-
     print('Token revoked');
     print('  database: $dbUri');
-    print('  token: $token');
+    print('  token_id: ${validated.tokenId}');
+    print('  token_prefix: ${token.substring(0, 8)}');
   } finally {
     await db.close();
   }
-}
-
-Future<void> _ensureSchema(PostgreSQLConnection db) async {
-  await db.query('''
-    CREATE TABLE IF NOT EXISTS api_keys (
-      id BIGSERIAL PRIMARY KEY,
-      token TEXT NOT NULL UNIQUE,
-      owner_name TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'active',
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      expires_at TIMESTAMPTZ,
-      last_used_at TIMESTAMPTZ
-    )
-  ''');
-  await db.query(
-    'CREATE INDEX IF NOT EXISTS idx_api_keys_token ON api_keys(token)',
-  );
-  await db.query(
-    'CREATE INDEX IF NOT EXISTS idx_api_keys_status ON api_keys(status)',
-  );
 }

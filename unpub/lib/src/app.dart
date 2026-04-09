@@ -35,6 +35,7 @@ class App {
       r'^/api/packages/([^/]+)/versions/(.+)$';
   static const _packageVersionsPathPattern = r'^/packages/([^/]+)\.json$';
   static const _sessionCookieName = 'unpub_session';
+  static const _sessionContextKey = 'unpub.session';
 
   /// meta information store
   final MetaStore metaStore;
@@ -110,6 +111,9 @@ class App {
   static shelf.Response _unauthorized([String message = 'unauthorized']) =>
       _badRequest(message, status: HttpStatus.unauthorized);
 
+  static shelf.Response _forbidden([String message = 'forbidden']) =>
+      _badRequest(message, status: HttpStatus.forbidden);
+
   http.Client? _googleapisClient;
 
   String _resolveUrl(shelf.Request req, String reference) {
@@ -128,6 +132,15 @@ class App {
 
     var authHeader = req.headers[HttpHeaders.authorizationHeader];
     if (authHeader == null) throw 'missing authorization header';
+
+    final bearerToken = _extractDownloadToken(req);
+    if (bearerToken != null && tokenStore != null) {
+      final validated = await tokenStore!.validateToken(bearerToken);
+      if (validated != null && validated.canPublish) {
+        await tokenStore!.markTokenUsed(tokenId: validated.tokenId);
+        return validated.ownerName;
+      }
+    }
 
     var token = authHeader.split(' ').last;
 
@@ -156,6 +169,8 @@ class App {
     var handler = const shelf.Pipeline()
         .addMiddleware(corsHeaders())
         .addMiddleware(shelf.logRequests())
+        .addMiddleware(_sessionValidationMiddleware())
+        .addMiddleware(_tokenPermissionMiddleware())
         .addMiddleware(_downloadAuthMiddleware())
         .addHandler((req) async {
           final flutterAsset = await _tryServeFlutterAsset(req);
@@ -212,8 +227,11 @@ class App {
           );
         }
 
+        final validated = hasDbTokenStore
+            ? await tokenStore!.validateToken(token)
+            : null;
         final isAllowed = hasDbTokenStore
-            ? await tokenStore!.isValidToken(token)
+            ? validated != null
             : token == configuredToken;
         if (!isAllowed) {
           _logDownloadAccess(
@@ -231,13 +249,28 @@ class App {
             status: HttpStatus.unauthorized,
           );
         }
+        if (hasDbTokenStore && validated != null && !validated.canDownload) {
+          _logDownloadAccess(
+            allowed: false,
+            req: req,
+            packageName: resource.packageName,
+            version: resource.version,
+            statusCode: HttpStatus.forbidden,
+            reason: 'token missing download permission',
+          );
+          return _forbidden('missing download permission');
+        }
 
         final res = await innerHandler(req);
         if (hasDbTokenStore) {
-          await tokenStore!.markTokenUsed(token);
-          if (resource.kind == _ProtectedResourceKind.download) {
+          if (validated != null) {
+            await tokenStore!.markTokenUsed(tokenId: validated.tokenId);
+          }
+          if (validated != null &&
+              resource.kind == _ProtectedResourceKind.download) {
             await tokenStore!.logDownload(
-              token: token,
+              tokenId: validated.tokenId,
+              userId: validated.userId,
               packageName: resource.packageName,
               version: resource.version,
               ipAddress: _extractClientIp(req),
@@ -255,6 +288,46 @@ class App {
         return res;
       };
     };
+  }
+
+  shelf.Middleware _tokenPermissionMiddleware() {
+    return (innerHandler) {
+      return (req) async {
+        if (tokenStore == null) return innerHandler(req);
+
+        final isPublishRoute = _isPublishRoute(req);
+        if (!isPublishRoute) return innerHandler(req);
+
+        final token = _extractDownloadToken(req);
+        if (token == null) return innerHandler(req);
+
+        final validated = await tokenStore!.validateToken(token);
+        if (validated == null) return innerHandler(req);
+        if (!validated.canPublish) {
+          return _forbidden('missing publish permission');
+        }
+        return innerHandler(req);
+      };
+    };
+  }
+
+  bool _isPublishRoute(shelf.Request req) {
+    final path = req.requestedUri.path;
+    if (req.method == 'POST' && path == '/api/packages/versions/newUpload') {
+      return true;
+    }
+
+    if (req.method == 'POST' &&
+        RegExp(r'^/api/packages/[^/]+/uploaders$').hasMatch(path)) {
+      return true;
+    }
+
+    if (req.method == 'DELETE' &&
+        RegExp(r'^/api/packages/[^/]+/uploaders/[^/]+$').hasMatch(path)) {
+      return true;
+    }
+
+    return false;
   }
 
   _ProtectedResource? _parseProtectedResource(String path) {
@@ -336,7 +409,21 @@ class App {
     return base64Url.encode(bytes).replaceAll('=', '');
   }
 
-  _SessionRecord? _activeSession(shelf.Request req) {
+  shelf.Middleware _sessionValidationMiddleware() {
+    return (innerHandler) {
+      return (req) async {
+        final session = _sessionFromCookie(req);
+        if (session == null) {
+          return innerHandler(req);
+        }
+        return innerHandler(
+          req.change(context: {...req.context, _sessionContextKey: session}),
+        );
+      };
+    };
+  }
+
+  _SessionRecord? _sessionFromCookie(shelf.Request req) {
     final sessionId = _cookieValue(req, _sessionCookieName);
     if (sessionId == null || sessionId.isEmpty) return null;
 
@@ -349,16 +436,23 @@ class App {
     return session;
   }
 
-  Future<_OperatorIdentity?> _operatorFromBearerToken(
-    shelf.Request req,
-  ) async {
+  _SessionRecord? _activeSession(shelf.Request req) {
+    final fromContext = req.context[_sessionContextKey];
+    if (fromContext is _SessionRecord) {
+      return fromContext;
+    }
+    return _sessionFromCookie(req);
+  }
+
+  Future<_OperatorIdentity?> _operatorFromBearerToken(shelf.Request req) async {
     final token = _extractDownloadToken(req);
     if (token == null) return null;
 
-    if (tokenStore != null && await tokenStore!.isValidToken(token)) {
-      final owner =
-          await tokenStore!.ownerByToken(token) ?? 'token-user';
-      return _OperatorIdentity(ownerName: owner, token: token);
+    if (tokenStore != null) {
+      final validated = await tokenStore!.validateToken(token);
+      if (validated != null) {
+        return _OperatorIdentity(ownerName: validated.ownerName, token: token);
+      }
     }
     final configuredToken = downloadToken?.trim();
     if (configuredToken != null &&
@@ -380,12 +474,13 @@ class App {
     }
   }
 
-  Future<_OperatorIdentity?> _authenticateOperator(
-    shelf.Request req,
-  ) async {
+  Future<_OperatorIdentity?> _authenticateOperator(shelf.Request req) async {
     final session = _activeSession(req);
     if (session != null) {
-      return _OperatorIdentity(ownerName: session.ownerName, token: session.token);
+      return _OperatorIdentity(
+        ownerName: session.ownerName,
+        token: session.token,
+      );
     }
 
     final bearerIdentity = await _operatorFromBearerToken(req);
@@ -794,12 +889,59 @@ class App {
 
   bool _isAdmin(String email) => adminEmails.contains(email);
 
+  Future<bool> _isOperatorAdmin(String ownerName) async {
+    if (_isAdmin(ownerName)) return true;
+    if (tokenStore == null) return false;
+    final user = await tokenStore!.findUserByEmail(ownerName);
+    return user?.role == 'admin';
+  }
+
   @Route.post('/auth/login')
   Future<shelf.Response> login(shelf.Request req) async {
     final bodyRaw = await req.readAsString();
     final body = bodyRaw.trim().isEmpty
         ? <String, dynamic>{}
         : (json.decode(bodyRaw) as Map<String, dynamic>);
+
+    final email = body['email']?.toString().trim();
+    final password = body['password']?.toString() ?? '';
+    if (email != null && email.isNotEmpty && password.isNotEmpty) {
+      if (tokenStore == null) {
+        return _badRequest(
+          'token store not configured',
+          status: HttpStatus.serviceUnavailable,
+        );
+      }
+      final user = await tokenStore!.authenticateUser(
+        email: email,
+        password: password,
+      );
+      if (user == null) {
+        return _unauthorized('invalid credentials');
+      }
+
+      final sessionId = _newSessionId();
+      _sessions[sessionId] = _SessionRecord(
+        sessionId: sessionId,
+        ownerName: user.email,
+        token: null,
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        expiresAt: DateTime.now().toUtc().add(sessionTtl),
+      );
+
+      return _withSessionCookie(
+        _okWithJson({
+          'data': {
+            'user': {'id': user.id, 'email': user.email, 'role': user.role},
+            'owner_name': user.email,
+          },
+        }),
+        sessionId: sessionId,
+      );
+    }
+
     final token = body['token']?.toString().trim();
     if (token == null || token.isEmpty) {
       return _unauthorized('invalid credentials');
@@ -807,10 +949,10 @@ class App {
 
     String? ownerName;
     if (tokenStore != null) {
-      final valid = await tokenStore!.isValidToken(token);
-      if (!valid) return _unauthorized('invalid credentials');
-      ownerName = await tokenStore!.ownerByToken(token) ?? 'token-user';
-      await tokenStore!.markTokenUsed(token);
+      final validated = await tokenStore!.validateToken(token);
+      if (validated == null) return _unauthorized('invalid credentials');
+      ownerName = validated.ownerName;
+      await tokenStore!.markTokenUsed(tokenId: validated.tokenId);
     } else {
       final configuredToken = downloadToken?.trim();
       if (configuredToken == null ||
@@ -826,6 +968,9 @@ class App {
       sessionId: sessionId,
       ownerName: ownerName,
       token: token,
+      userId: null,
+      email: ownerName,
+      role: null,
       expiresAt: DateTime.now().toUtc().add(sessionTtl),
     );
 
@@ -844,7 +989,15 @@ class App {
       return _unauthorized('not logged in');
     }
     return _okWithJson({
-      'data': {'owner_name': session.ownerName},
+      'data': {
+        'owner_name': session.ownerName,
+        if (session.userId != null && session.email != null)
+          'user': {
+            'id': session.userId,
+            'email': session.email,
+            'role': session.role,
+          },
+      },
     });
   }
 
@@ -878,22 +1031,54 @@ class App {
     final owner = (requestedOwner == null || requestedOwner.isEmpty)
         ? operatorEmail
         : requestedOwner;
-    if (!_isAdmin(operatorEmail) && owner != operatorEmail) {
+    final isOperatorAdmin = await _isOperatorAdmin(operatorEmail);
+    if (!isOperatorAdmin && owner != operatorEmail) {
       return _badRequest('no permission', status: HttpStatus.forbidden);
     }
 
-    final expiresAt = body['expires_at']?.toString().trim();
-    if (expiresAt != null && expiresAt.isNotEmpty) {
-      try {
-        DateTime.parse(expiresAt);
-      } catch (_) {
-        return _badRequest('invalid expires_at (ISO-8601 expected)');
+    final tokenName = body['name']?.toString().trim();
+    if (tokenName == null || tokenName.isEmpty) {
+      return _badRequest('name is required');
+    }
+
+    final expiryDaysRaw = body['expiry_days']?.toString().trim();
+    int? expiryDays;
+    if (expiryDaysRaw != null && expiryDaysRaw.isNotEmpty) {
+      expiryDays = int.tryParse(expiryDaysRaw);
+      if (expiryDays == null || expiryDays < 1 || expiryDays > 3650) {
+        return _badRequest('invalid expiry_days');
+      }
+    }
+
+    final canDownload = body['can_download'] != false;
+    final canPublish = body['can_publish'] == true;
+    if (!canDownload && !canPublish) {
+      return _badRequest('at least one permission is required');
+    }
+
+    String? expiresAt;
+    if (expiryDays != null) {
+      expiresAt = DateTime.now()
+          .toUtc()
+          .add(Duration(days: expiryDays))
+          .toIso8601String();
+    } else {
+      final expiresAtRaw = body['expires_at']?.toString().trim();
+      if (expiresAtRaw != null && expiresAtRaw.isNotEmpty) {
+        try {
+          expiresAt = DateTime.parse(expiresAtRaw).toUtc().toIso8601String();
+        } catch (_) {
+          return _badRequest('invalid expires_at (ISO-8601 expected)');
+        }
       }
     }
 
     final created = await tokenStore!.createToken(
       ownerName: owner,
+      name: tokenName,
       expiresAt: expiresAt == null || expiresAt.isEmpty ? null : expiresAt,
+      canDownload: canDownload,
+      canPublish: canPublish,
     );
     return _okWithJson({'data': created.toJson()});
   }
@@ -911,7 +1096,7 @@ class App {
     if (operator == null) return _unauthorized();
     final operatorEmail = operator.ownerName;
     final includeAll = req.requestedUri.queryParameters['all'] == '1';
-    final canListAll = includeAll && _isAdmin(operatorEmail);
+    final canListAll = includeAll && (await _isOperatorAdmin(operatorEmail));
     final tokens = await tokenStore!.listTokens(
       ownerName: canListAll ? null : operatorEmail,
     );
@@ -937,9 +1122,10 @@ class App {
     final operator = await _authenticateOperator(req);
     if (operator == null) return _unauthorized();
     final operatorEmail = operator.ownerName;
+    final isOperatorAdmin = await _isOperatorAdmin(operatorEmail);
     final revoked = await tokenStore!.revokeToken(
       id: tokenId,
-      ownerName: _isAdmin(operatorEmail) ? null : operatorEmail,
+      ownerName: isOperatorAdmin ? null : operatorEmail,
     );
     if (!revoked) {
       return _badRequest('token not found', status: HttpStatus.notFound);
@@ -961,7 +1147,7 @@ class App {
     if (operator == null) return _unauthorized();
     final operatorEmail = operator.ownerName;
     final includeAll = req.requestedUri.queryParameters['all'] == '1';
-    final canListAll = includeAll && _isAdmin(operatorEmail);
+    final canListAll = includeAll && (await _isOperatorAdmin(operatorEmail));
     final limit = int.tryParse(req.requestedUri.queryParameters['limit'] ?? '');
     final downloads = await tokenStore!.listDownloads(
       ownerName: canListAll ? null : operatorEmail,
@@ -970,6 +1156,56 @@ class App {
     return _okWithJson({
       'data': [for (final row in downloads) row.toJson()],
     });
+  }
+
+  @Route.get('/admin/users')
+  Future<shelf.Response> listUsers(shelf.Request req) async {
+    if (tokenStore == null) {
+      return _badRequest(
+        'token store not configured',
+        status: HttpStatus.serviceUnavailable,
+      );
+    }
+
+    final operator = await _authenticateOperator(req);
+    if (operator == null) return _unauthorized();
+    final canManageUsers = await _isOperatorAdmin(operator.ownerName);
+    if (!canManageUsers) {
+      return _badRequest('no permission', status: HttpStatus.forbidden);
+    }
+
+    final users = await tokenStore!.listUsers();
+    return _okWithJson({
+      'data': [for (final user in users) user.toJson()],
+    });
+  }
+
+  @Route.post('/admin/users/<id>/disable')
+  Future<shelf.Response> disableUser(shelf.Request req, String id) async {
+    if (tokenStore == null) {
+      return _badRequest(
+        'token store not configured',
+        status: HttpStatus.serviceUnavailable,
+      );
+    }
+
+    final operator = await _authenticateOperator(req);
+    if (operator == null) return _unauthorized();
+    final canManageUsers = await _isOperatorAdmin(operator.ownerName);
+    if (!canManageUsers) {
+      return _badRequest('no permission', status: HttpStatus.forbidden);
+    }
+
+    final userId = int.tryParse(id);
+    if (userId == null) {
+      return _badRequest('invalid user id');
+    }
+
+    final disabled = await tokenStore!.disableUser(userId);
+    if (!disabled) {
+      return _badRequest('user not found', status: HttpStatus.notFound);
+    }
+    return _successMessage('user disabled');
   }
 
   @Route.get('/webapi/packages')
@@ -1206,13 +1442,19 @@ class _ProtectedResource {
 class _SessionRecord {
   final String sessionId;
   final String ownerName;
-  final String token;
+  final String? token;
+  final int? userId;
+  final String? email;
+  final String? role;
   final DateTime expiresAt;
 
   _SessionRecord({
     required this.sessionId,
     required this.ownerName,
     required this.token,
+    required this.userId,
+    required this.email,
+    required this.role,
     required this.expiresAt,
   });
 }
@@ -1221,8 +1463,5 @@ class _OperatorIdentity {
   final String ownerName;
   final String? token;
 
-  _OperatorIdentity({
-    required this.ownerName,
-    required this.token,
-  });
+  _OperatorIdentity({required this.ownerName, required this.token});
 }
