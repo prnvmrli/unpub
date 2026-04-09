@@ -8,9 +8,12 @@ class AuthSession extends ChangeNotifier {
   final ApiClient _apiClient;
   bool _loading = false;
   String? _ownerName;
+  String? _userRole;
 
   bool get isLoading => _loading;
   String? get ownerName => _ownerName;
+  String? get userRole => _userRole;
+  bool get isAdmin => _userRole == 'admin';
   bool get isLoggedIn => _ownerName != null && _ownerName!.isNotEmpty;
   String get shortToken => isLoggedIn ? _ownerName! : 'none';
 
@@ -18,26 +21,37 @@ class AuthSession extends ChangeNotifier {
     _loading = true;
     notifyListeners();
     try {
-      final response = await _apiClient.get('/auth/me');
-      final data = response['data'] as Map<String, dynamic>;
-      _ownerName = data['owner_name']?.toString();
+      final response = await _apiClient.getCurrentUser();
+      _applySessionData(response['data'] as Map<String, dynamic>);
     } catch (_) {
       _ownerName = null;
+      _userRole = null;
     } finally {
       _loading = false;
       notifyListeners();
     }
   }
 
-  Future<bool> login(String token) async {
+  Future<bool> login(String token) => loginWithToken(token);
+
+  Future<bool> loginWithToken(String token) async {
     try {
-      final response = await _apiClient.post(
-        '/auth/login',
-        headers: const {'content-type': 'application/json'},
-        body: {'token': token},
-      );
-      final data = response['data'] as Map<String, dynamic>;
-      _ownerName = data['owner_name']?.toString();
+      final response = await _apiClient.login(token: token);
+      _applySessionData(response['data'] as Map<String, dynamic>);
+      notifyListeners();
+      return isLoggedIn;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> loginWithPassword({
+    required String email,
+    required String password,
+  }) async {
+    try {
+      final response = await _apiClient.login(email: email, password: password);
+      _applySessionData(response['data'] as Map<String, dynamic>);
       notifyListeners();
       return isLoggedIn;
     } catch (_) {
@@ -56,7 +70,23 @@ class AuthSession extends ChangeNotifier {
       // ignore
     }
     _ownerName = null;
+    _userRole = null;
     notifyListeners();
   }
-}
 
+  void _applySessionData(Map<String, dynamic> data) {
+    final user = data['user'];
+    if (user is Map<String, dynamic>) {
+      final email = user['email']?.toString().trim();
+      final role = user['role']?.toString().trim().toLowerCase();
+      if (email != null && email.isNotEmpty) {
+        _ownerName = email;
+        _userRole = (role == null || role.isEmpty) ? 'client' : role;
+        return;
+      }
+    }
+    final owner = data['owner_name']?.toString().trim();
+    _ownerName = (owner == null || owner.isEmpty) ? null : owner;
+    _userRole = _ownerName == null ? null : 'developer';
+  }
+}

@@ -6,95 +6,34 @@ import '../features/admin/presentation/pages/login_page.dart';
 import '../features/packages/presentation/pages/package_detail_page.dart';
 import '../features/packages/presentation/pages/package_list_page.dart';
 import '../l10n/app_localizations_ext.dart';
-import 'app_dependencies.dart';
 import '../shared/widgets/app_scaffold.dart';
+import 'app_dependencies.dart';
+
+part 'app_router.g.dart';
+
+late final AppDependencies _dependencies;
 
 GoRouter createAppRouter(AppDependencies dependencies) {
+  _dependencies = dependencies;
+
   return GoRouter(
     refreshListenable: dependencies.authSession,
     redirect: (context, state) {
       final path = state.uri.path;
+      final isDashboardPath = path.startsWith('/dashboard');
       final isAdminPath = path.startsWith('/admin');
       final isLoginPath = path == '/login';
+      final isProtectedPath = isDashboardPath || isAdminPath;
 
-      if (isAdminPath && !dependencies.authSession.isLoggedIn) {
-        return '/login?from=${Uri.encodeQueryComponent(state.uri.toString())}';
+      if (isProtectedPath && !dependencies.authSession.isLoggedIn) {
+        return LoginRoute(from: state.uri.toString()).location;
       }
       if (isLoginPath && dependencies.authSession.isLoggedIn) {
-        return '/admin/tokens';
+        return const DashboardRoute().location;
       }
       return null;
     },
-    routes: [
-      GoRoute(
-        path: '/',
-        builder: (context, state) {
-          final query = state.uri.queryParameters['q'];
-          final page = int.tryParse(state.uri.queryParameters['page'] ?? '0') ?? 0;
-          return PackageListPage(
-            authSession: dependencies.authSession,
-            packagesRepository: dependencies.packagesRepository,
-            page: page,
-            searchQuery: query,
-            size: 15,
-          );
-        },
-      ),
-      GoRoute(
-        path: '/packages',
-        builder: (context, state) {
-          final query = state.uri.queryParameters['q'];
-          final page = int.tryParse(state.uri.queryParameters['page'] ?? '0') ?? 0;
-          return PackageListPage(
-            authSession: dependencies.authSession,
-            packagesRepository: dependencies.packagesRepository,
-            page: page,
-            searchQuery: query,
-            size: 15,
-          );
-        },
-      ),
-      GoRoute(
-        path: '/packages/:name',
-        builder: (context, state) {
-          return PackageDetailPage(
-            authSession: dependencies.authSession,
-            packagesRepository: dependencies.packagesRepository,
-            name: Uri.decodeComponent(state.pathParameters['name']!),
-            version: 'latest',
-          );
-        },
-      ),
-      GoRoute(
-        path: '/packages/:name/versions/:version',
-        builder: (context, state) {
-          return PackageDetailPage(
-            authSession: dependencies.authSession,
-            packagesRepository: dependencies.packagesRepository,
-            name: Uri.decodeComponent(state.pathParameters['name']!),
-            version: Uri.decodeComponent(state.pathParameters['version']!),
-          );
-        },
-      ),
-      GoRoute(
-        path: '/login',
-        builder: (context, state) {
-          return LoginPage(
-            authSession: dependencies.authSession,
-            from: state.uri.queryParameters['from'],
-          );
-        },
-      ),
-      GoRoute(
-        path: '/admin/tokens',
-        builder: (context, state) {
-          return AdminTokensPage(
-            authSession: dependencies.authSession,
-            adminRepository: dependencies.adminRepository,
-          );
-        },
-      ),
-    ],
+    routes: $appRoutes,
     errorBuilder: (context, state) {
       final l10n = context.l10n;
       return AppScaffold(
@@ -103,10 +42,10 @@ GoRouter createAppRouter(AppDependencies dependencies) {
         onSearch: (value) {
           final query = value.trim();
           if (query.isEmpty) {
-            context.go('/packages');
+            const PackagesRoute().go(context);
             return;
           }
-          context.go('/packages?q=${Uri.encodeQueryComponent(query)}');
+          PackagesRoute(q: query).go(context);
         },
         body: Center(child: Text(l10n.notFound)),
       );
@@ -114,3 +53,110 @@ GoRouter createAppRouter(AppDependencies dependencies) {
   );
 }
 
+@TypedGoRoute<HomeRoute>(path: '/')
+class HomeRoute extends GoRouteData with $HomeRoute {
+  const HomeRoute({this.q, this.page});
+
+  final String? q;
+  final int? page;
+
+  @override
+  Widget build(BuildContext context, GoRouterState state) {
+    return PackageListPage(
+      authSession: _dependencies.authSession,
+      packagesRepository: _dependencies.packagesRepository,
+      page: page ?? 0,
+      searchQuery: q,
+      size: 15,
+    );
+  }
+}
+
+@TypedGoRoute<PackagesRoute>(path: '/packages')
+class PackagesRoute extends GoRouteData with $PackagesRoute {
+  const PackagesRoute({this.q, this.page});
+
+  final String? q;
+  final int? page;
+
+  @override
+  Widget build(BuildContext context, GoRouterState state) {
+    return PackageListPage(
+      authSession: _dependencies.authSession,
+      packagesRepository: _dependencies.packagesRepository,
+      page: page ?? 0,
+      searchQuery: q,
+      size: 15,
+    );
+  }
+}
+
+@TypedGoRoute<PackageLatestRoute>(path: '/packages/:name')
+class PackageLatestRoute extends GoRouteData with $PackageLatestRoute {
+  const PackageLatestRoute({required this.name});
+
+  final String name;
+
+  @override
+  Widget build(BuildContext context, GoRouterState state) {
+    return PackageDetailPage(
+      authSession: _dependencies.authSession,
+      packagesRepository: _dependencies.packagesRepository,
+      name: name,
+      version: 'latest',
+    );
+  }
+}
+
+@TypedGoRoute<PackageVersionRoute>(path: '/packages/:name/versions/:version')
+class PackageVersionRoute extends GoRouteData with $PackageVersionRoute {
+  const PackageVersionRoute({required this.name, required this.version});
+
+  final String name;
+  final String version;
+
+  @override
+  Widget build(BuildContext context, GoRouterState state) {
+    return PackageDetailPage(
+      authSession: _dependencies.authSession,
+      packagesRepository: _dependencies.packagesRepository,
+      name: name,
+      version: version,
+    );
+  }
+}
+
+@TypedGoRoute<LoginRoute>(path: '/login')
+class LoginRoute extends GoRouteData with $LoginRoute {
+  const LoginRoute({this.from});
+
+  final String? from;
+
+  @override
+  Widget build(BuildContext context, GoRouterState state) {
+    return LoginPage(authSession: _dependencies.authSession, from: from);
+  }
+}
+
+@TypedGoRoute<DashboardRoute>(path: '/dashboard')
+class DashboardRoute extends GoRouteData with $DashboardRoute {
+  const DashboardRoute();
+
+  @override
+  Widget build(BuildContext context, GoRouterState state) {
+    return AdminTokensPage(
+      authSession: _dependencies.authSession,
+      adminRepository: _dependencies.adminRepository,
+    );
+  }
+}
+
+@TypedGoRoute<AdminTokensLegacyRoute>(path: '/admin/tokens')
+class AdminTokensLegacyRoute extends GoRouteData with $AdminTokensLegacyRoute {
+  const AdminTokensLegacyRoute();
+
+  @override
+  String? redirect(BuildContext context, GoRouterState state) {
+    return const DashboardRoute().location;
+  }
+}

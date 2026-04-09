@@ -10,11 +10,7 @@ import '../../../../shared/widgets/fade_slide_in.dart';
 import '../bloc/login_cubit.dart';
 
 class LoginPage extends StatelessWidget {
-  const LoginPage({
-    required this.authSession,
-    required this.from,
-    super.key,
-  });
+  const LoginPage({required this.authSession, required this.from, super.key});
 
   final AuthSession authSession;
   final String? from;
@@ -37,7 +33,7 @@ class LoginPage extends StatelessWidget {
         listenWhen: (previous, current) => previous.success != current.success,
         listener: (context, state) {
           if (state.success) {
-            context.go(from ?? '/admin/tokens');
+            context.go(from ?? '/dashboard');
           }
         },
         child: AppScaffold(
@@ -64,17 +60,55 @@ class LoginPage extends StatelessWidget {
                               style: Theme.of(context).textTheme.headlineMedium,
                             ),
                             const SizedBox(height: 10),
-                            Text(l10n.pasteBearerToken),
-                            const SizedBox(height: 12),
-                            TextField(
-                              obscureText: true,
-                              onChanged: cubit.onTokenChanged,
-                              onSubmitted: (_) => cubit.login(),
-                              decoration: InputDecoration(
-                                labelText: l10n.bearerToken,
-                                border: const OutlineInputBorder(),
-                              ),
+                            SegmentedButton<bool>(
+                              segments: const [
+                                ButtonSegment<bool>(
+                                  value: true,
+                                  label: Text('Email + Password'),
+                                ),
+                                ButtonSegment<bool>(
+                                  value: false,
+                                  label: Text('Bearer Token'),
+                                ),
+                              ],
+                              selected: {state.usePasswordLogin},
+                              onSelectionChanged: (selection) {
+                                cubit.setUsePasswordLogin(selection.first);
+                              },
                             ),
+                            const SizedBox(height: 12),
+                            if (state.usePasswordLogin) ...[
+                              TextField(
+                                onChanged: cubit.onEmailChanged,
+                                onSubmitted: (_) => cubit.login(),
+                                decoration: const InputDecoration(
+                                  labelText: 'Email',
+                                  border: OutlineInputBorder(),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              TextField(
+                                obscureText: true,
+                                onChanged: cubit.onPasswordChanged,
+                                onSubmitted: (_) => cubit.login(),
+                                decoration: const InputDecoration(
+                                  labelText: 'Password',
+                                  border: OutlineInputBorder(),
+                                ),
+                              ),
+                            ] else ...[
+                              Text(l10n.pasteBearerToken),
+                              const SizedBox(height: 12),
+                              TextField(
+                                obscureText: true,
+                                onChanged: cubit.onTokenChanged,
+                                onSubmitted: (_) => cubit.login(),
+                                decoration: InputDecoration(
+                                  labelText: l10n.bearerToken,
+                                  border: const OutlineInputBorder(),
+                                ),
+                              ),
+                            ],
                             if (errorText != null) ...[
                               const SizedBox(height: 10),
                               Text(
@@ -108,6 +142,8 @@ class LoginPage extends StatelessWidget {
 
   String? _errorText(AppLocalizations l10n, LoginErrorType? errorType) {
     switch (errorType) {
+      case LoginErrorType.emptyCredentials:
+        return 'Enter email and password';
       case LoginErrorType.emptyToken:
         return l10n.enterBearerToken;
       case LoginErrorType.invalidToken:

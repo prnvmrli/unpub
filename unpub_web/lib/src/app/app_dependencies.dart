@@ -5,8 +5,8 @@ import '../features/admin/data/admin_repository.dart';
 import '../features/packages/data/packages_repository.dart';
 
 class AppDependencies {
-  AppDependencies() {
-    apiClient = const ApiClient();
+  AppDependencies({String? apiBaseUrl}) {
+    apiClient = ApiClient(baseUrl: apiBaseUrl);
     authSession = AuthSession(apiClient);
     themeCubit = ThemeCubit();
     packagesRepository = PackagesRepository(apiClient);

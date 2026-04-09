@@ -7,38 +7,37 @@ class AdminRepository {
   final ApiClient _apiClient;
 
   Future<List<AdminToken>> listTokens({bool includeAll = false}) async {
-    final response = await _apiClient.get(
-      '/admin/tokens/me',
-      queryParameters: {'all': includeAll ? '1' : '0'},
-    );
-    final data = (response['data'] as List).cast<Map<String, dynamic>>();
+    final data = await _apiClient.listTokens(includeAll: includeAll);
     return data.map(AdminToken.fromJson).toList(growable: false);
   }
 
   Future<String> createToken({
-    String? ownerName,
-    String? expiresAt,
+    required String name,
+    int? expiryDays,
+    bool canDownload = true,
+    bool canPublish = false,
   }) async {
-    final response = await _apiClient.post(
-      '/admin/tokens',
-      headers: const {'content-type': 'application/json'},
-      body: {
-        if (ownerName != null && ownerName.trim().isNotEmpty)
-          'owner_name': ownerName.trim(),
-        if (expiresAt != null && expiresAt.trim().isNotEmpty)
-          'expires_at': expiresAt.trim(),
-      },
+    final response = await _apiClient.createToken(
+      name: name,
+      expiryDays: expiryDays,
+      canDownload: canDownload,
+      canPublish: canPublish,
     );
     final data = response['data'] as Map<String, dynamic>;
     return '${data['token'] ?? ''}';
   }
 
   Future<void> revokeToken({required String tokenId}) async {
-    await _apiClient.post(
-      '/admin/tokens/$tokenId/revoke',
-      headers: const {'content-type': 'application/json'},
-      body: const {},
-    );
+    await _apiClient.revokeToken(tokenId);
+  }
+
+  Future<List<AdminUser>> listUsers() async {
+    final data = await _apiClient.listUsers();
+    return data.map(AdminUser.fromJson).toList(growable: false);
+  }
+
+  Future<void> disableUser({required String userId}) async {
+    await _apiClient.disableUser(userId);
   }
 
   Future<List<DownloadLog>> listDownloads({
@@ -47,13 +46,9 @@ class AdminRepository {
   }) async {
     final response = await _apiClient.get(
       '/admin/downloads',
-      queryParameters: {
-        'all': includeAll ? '1' : '0',
-        'limit': '$limit',
-      },
+      queryParameters: {'all': includeAll ? '1' : '0', 'limit': '$limit'},
     );
     final data = (response['data'] as List).cast<Map<String, dynamic>>();
     return data.map(DownloadLog.fromJson).toList(growable: false);
   }
 }
-

@@ -123,16 +123,16 @@ class _TopHeaderState extends State<TopHeader> {
   }
 
   InputDecoration _searchDecoration(BuildContext context) => InputDecoration(
-        hintText: context.l10n.searchPackages,
-        prefixIcon: const Icon(Icons.search, size: 20),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide.none,
-        ),
-        fillColor: Colors.white,
-        filled: true,
-      );
+    hintText: context.l10n.searchPackages,
+    prefixIcon: const Icon(Icons.search, size: 20),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: BorderSide.none,
+    ),
+    fillColor: Colors.white,
+    filled: true,
+  );
 }
 
 class _ThemeToggleButton extends StatelessWidget {
@@ -147,7 +147,9 @@ class _ThemeToggleButton extends StatelessWidget {
         return IconButton.filledTonal(
           onPressed: () => context.read<ThemeCubit>().toggle(),
           tooltip: isDark ? l10n.switchToLight : l10n.switchToDark,
-          icon: Icon(isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded),
+          icon: Icon(
+            isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+          ),
           style: IconButton.styleFrom(
             backgroundColor: Colors.white.withValues(alpha: 0.16),
             foregroundColor: Colors.white,
@@ -187,10 +189,7 @@ class _Brand extends StatelessWidget {
 }
 
 class _AdminNav extends StatelessWidget {
-  const _AdminNav({
-    required this.authSession,
-    required this.currentPath,
-  });
+  const _AdminNav({required this.authSession, required this.currentPath});
 
   final AuthSession authSession;
   final String currentPath;
@@ -201,20 +200,25 @@ class _AdminNav extends StatelessWidget {
     return AnimatedBuilder(
       animation: authSession,
       builder: (context, _) {
-        final target = authSession.isLoggedIn ? '/admin/tokens' : '/login';
-        final selected = currentPath.startsWith('/admin') || currentPath == '/login';
+        final target = authSession.isLoggedIn ? '/dashboard' : '/login';
+        final selected =
+            currentPath.startsWith('/dashboard') ||
+            currentPath.startsWith('/admin') ||
+            currentPath == '/login';
         return TextButton(
           onPressed: () => context.go(target),
           style: TextButton.styleFrom(
-            backgroundColor: selected ? Colors.white.withValues(alpha: 0.16) : null,
+            backgroundColor: selected
+                ? Colors.white.withValues(alpha: 0.16)
+                : null,
             foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
           child: Text(
             authSession.isLoggedIn ? l10n.admin : l10n.login,
-            style: TextStyle(
-              color: selected ? Colors.white : Colors.white70,
-            ),
+            style: TextStyle(color: selected ? Colors.white : Colors.white70),
           ),
         );
       },
