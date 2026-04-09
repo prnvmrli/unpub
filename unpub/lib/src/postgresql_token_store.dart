@@ -114,12 +114,14 @@ class PostgreSqlTokenStore implements TokenStore {
       $$ LANGUAGE plpgsql;
     ''');
 
+    await db.query(
+      'DROP TRIGGER IF EXISTS trg_revoke_tokens_on_user_disable ON users',
+    );
     await db.query('''
-      DROP TRIGGER IF EXISTS trg_revoke_tokens_on_user_disable ON users;
       CREATE TRIGGER trg_revoke_tokens_on_user_disable
       BEFORE UPDATE OF is_disabled ON users
       FOR EACH ROW
-      EXECUTE FUNCTION revoke_tokens_on_user_disable();
+      EXECUTE FUNCTION revoke_tokens_on_user_disable()
     ''');
   }
 

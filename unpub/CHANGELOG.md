@@ -1,3 +1,7 @@
+## 3.1.1
+
+- Fix PostgreSQL trigger initialization for user-disable token revocation by executing trigger drop/create statements separately.
+
 ## 3.1.0
 
 - Add secure token model with `token_prefix + token_hash` storage and SHA-256 verification.
