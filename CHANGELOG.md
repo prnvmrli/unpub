@@ -2,6 +2,20 @@
 
 All notable changes to this repository are documented in this file.
 
+## 2026-04-09
+
+### Added
+- Added PostgreSQL-backed metadata and token store implementations in `unpub`.
+- Added workspace-level Docker Compose at repo root for local PostgreSQL test infrastructure.
+- Added parallel-safe test database isolation per test file.
+
+### Changed
+- Migrated `unpub` database layer from MongoDB/SQLite to PostgreSQL.
+- Updated CLI defaults and token admin tools to use PostgreSQL URIs.
+- Updated package docs/examples (`unpub`, `unpub_aws`) to PostgreSQL usage.
+- Refocused `unpub_aws/docker-compose.yml` to AWS-specific local infra (`mock_s3`) only.
+- Modernized integration tests to use direct HTTP upload/uploader flows instead of deprecated `dart pub` command behaviors.
+
 ## 2026-04-03
 
 ### Added
@@ -16,4 +30,3 @@ All notable changes to this repository are documented in this file.
 - Adopted Dart workspace resolution (`resolution: workspace`) across packages.
 - Upgraded direct dependencies to latest resolvable versions within compatibility constraints (including `http 1.x`, `archive 4.x`, and related tooling/lints updates).
 - Updated Melos scripts for reliable `dart run melos ...` execution in FVM-based environments.
-

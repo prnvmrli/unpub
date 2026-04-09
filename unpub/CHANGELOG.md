@@ -1,3 +1,12 @@
+## 3.0.0
+
+- Replace MongoDB metadata storage with PostgreSQL-backed metadata storage.
+- Replace SQLite token storage with PostgreSQL-backed token and download-log storage.
+- Add PostgreSQL connection helpers and PostgreSQL store implementations.
+- Update CLI and token management tools to PostgreSQL database URIs.
+- Migrate tests to PostgreSQL and make test database usage parallel-safe.
+- Update documentation and examples to PostgreSQL defaults.
+
 ## 2.0.1
 
 - Migrate frontend experience to Flutter web (`unpub_web`) and integrate serving with the unpub backend.

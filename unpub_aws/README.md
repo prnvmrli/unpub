@@ -12,11 +12,11 @@ Use AWS S3 or another S3 API compatible endpoint as your file storage.
 
 ```dart
 import 'package:unpub/unpub.dart' as unpub;
-import 'package:unpub/' as unpub_aws;
+import 'package:unpub_aws/unpub_aws.dart' as unpub_aws;
 
 var app = unpub.App(
   // ...
-  packageStore: unpub.S3Store('your-bucket-name'),
+  packageStore: unpub_aws.S3Store('your-bucket-name'),
 );
 ```
 
@@ -38,17 +38,17 @@ AWS_S3_ENDPOINT=s3.amazonaws.com
 Kitchen Sink Example:
 
 ```dart
-import 'package:mongo_dart/mongo_dart.dart';
 import 'package:unpub/unpub.dart' as unpub;
 import 'package:unpub_aws/src/aws_credentials.dart';
 import 'package:unpub_aws/unpub_aws.dart' as unpub_aws;
 
 main(List<String> args) async {
-  final db = Db('mongodb://localhost:27017/dart_pub');
-  await db.open(); // make sure the MongoDB connection opened
+  final db = await unpub.openPostgreSqlConnection(
+    'postgresql://localhost:5432/dart_pub?sslmode=disable',
+  );
 
   final app = unpub.App(
-    metaStore: unpub.MongoStore(db),
+    metaStore: unpub.PostgreSqlMetaStore(db),
     packageStore: unpub_aws.S3Store('my-bucket-name',
 
         // We attempt to find region from AWS_DEFAULT_REGION. If one is not

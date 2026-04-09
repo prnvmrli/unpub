@@ -1,11 +1,15 @@
 import 'dart:io';
 
 import 'package:args/args.dart';
-import 'package:sqlite3/sqlite3.dart';
+import 'package:postgres/postgres.dart';
+import 'package:unpub/src/postgresql_connection.dart';
 
-void main(List<String> args) {
+Future<void> main(List<String> args) async {
   final parser = ArgParser()
-    ..addOption('db-path', defaultsTo: './unpub-tokens.db')
+    ..addOption(
+      'database',
+      defaultsTo: 'postgresql://localhost:5432/dart_pub?sslmode=disable',
+    )
     ..addOption('token');
 
   final results = parser.parse(args);
@@ -15,52 +19,52 @@ void main(List<String> args) {
     exit(2);
   }
 
-  final dbPath = (results['db-path'] as String).trim();
-  final db = sqlite3.open(dbPath);
+  final dbUri = (results['database'] as String).trim();
+  final db = await openPostgreSqlConnection(dbUri);
   try {
-    _ensureSchema(db);
-    final existing = db.select(
-      'SELECT id, status FROM api_keys WHERE token = ? LIMIT 1',
-      [token],
+    await _ensureSchema(db);
+    final existing = await db.query(
+      'SELECT id, status FROM api_keys WHERE token = @token LIMIT 1',
+      substitutionValues: {'token': token},
     );
     if (existing.isEmpty) {
       stderr.writeln('Token not found');
       exit(3);
     }
 
-    db.execute(
+    await db.query(
       '''
       UPDATE api_keys
       SET status = 'revoked'
-      WHERE token = ?
+      WHERE token = @token
       ''',
-      [token],
+      substitutionValues: {'token': token},
     );
 
     print('Token revoked');
-    print('  db: $dbPath');
+    print('  database: $dbUri');
     print('  token: $token');
   } finally {
-    db.close();
+    await db.close();
   }
 }
 
-void _ensureSchema(Database db) {
-  db.execute('''
+Future<void> _ensureSchema(PostgreSQLConnection db) async {
+  await db.query('''
     CREATE TABLE IF NOT EXISTS api_keys (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id BIGSERIAL PRIMARY KEY,
       token TEXT NOT NULL UNIQUE,
       owner_name TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'active',
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      expires_at TEXT,
-      last_used_at TEXT
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ,
+      last_used_at TIMESTAMPTZ
     )
   ''');
-  db.execute(
+  await db.query(
     'CREATE INDEX IF NOT EXISTS idx_api_keys_token ON api_keys(token)',
   );
-  db.execute(
+  await db.query(
     'CREATE INDEX IF NOT EXISTS idx_api_keys_status ON api_keys(status)',
   );
 }

@@ -1,13 +1,13 @@
 name: unpub_aws
 description: A collection of modules to use for deploying unpub into AWS infrastructure.
-version: 0.1.0
+version: 0.2.0
 homepage: https://github.com/bytedance/unpub
 environment:
   sdk: "^3.11.4"
 resolution: workspace
 
 dependencies:
-  unpub: ^2.0.1
+  unpub: ^3.0.0
   minio: ^3.5.8
   http: ^1.6.0
 

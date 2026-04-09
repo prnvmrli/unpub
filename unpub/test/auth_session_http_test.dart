@@ -3,20 +3,22 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
+import 'package:postgres/postgres.dart';
 import 'package:test/test.dart';
 import 'package:unpub/unpub.dart' as unpub;
+import 'utils.dart';
 
 void main() {
   late HttpServer server;
   late Uri baseUri;
-  late unpub.SqliteTokenStore tokenStore;
-  late File dbFile;
+  late PostgreSQLConnection db;
+  late unpub.PostgreSqlTokenStore tokenStore;
 
   setUpAll(() async {
-    dbFile = File(
-      '${Directory.systemTemp.path}/unpub-auth-test-${DateTime.now().millisecondsSinceEpoch}.db',
-    );
-    tokenStore = unpub.SqliteTokenStore(dbFile.path);
+    db = await openTestDb(databaseName: 'dart_pub_test_auth');
+    await db.query('DROP TABLE IF EXISTS downloads');
+    await db.query('DROP TABLE IF EXISTS api_keys');
+    tokenStore = unpub.PostgreSqlTokenStore(db);
 
     final app = unpub.App(
       metaStore: _MemoryMetaStore(),
@@ -30,13 +32,15 @@ void main() {
 
   tearDownAll(() async {
     await server.close(force: true);
-    if (dbFile.existsSync()) {
-      dbFile.deleteSync();
-    }
+    await db.query('DROP TABLE IF EXISTS downloads');
+    await db.query('DROP TABLE IF EXISTS api_keys');
+    await db.close();
   });
 
   test('session login/me/logout and admin access over cookie', () async {
-    final created = await tokenStore.createToken(ownerName: 'admin@example.com');
+    final created = await tokenStore.createToken(
+      ownerName: 'admin@example.com',
+    );
 
     final loginRes = await http.post(
       baseUri.resolve('/auth/login'),
@@ -56,7 +60,10 @@ void main() {
     );
     expect(meRes.statusCode, HttpStatus.ok);
     final meJson = json.decode(meRes.body) as Map<String, dynamic>;
-    expect((meJson['data'] as Map<String, dynamic>)['owner_name'], 'admin@example.com');
+    expect(
+      (meJson['data'] as Map<String, dynamic>)['owner_name'],
+      'admin@example.com',
+    );
 
     final tokensRes = await http.get(
       baseUri.resolve('/admin/tokens/me?all=1'),
@@ -66,10 +73,7 @@ void main() {
 
     final logoutRes = await http.post(
       baseUri.resolve('/auth/logout'),
-      headers: {
-        'cookie': cookieHeader,
-        'content-type': 'application/json',
-      },
+      headers: {'cookie': cookieHeader, 'content-type': 'application/json'},
       body: '{}',
     );
     expect(logoutRes.statusCode, HttpStatus.ok);
@@ -83,7 +87,9 @@ void main() {
   });
 
   test('admin API still supports bearer token auth', () async {
-    final created = await tokenStore.createToken(ownerName: 'owner@example.com');
+    final created = await tokenStore.createToken(
+      ownerName: 'owner@example.com',
+    );
     final tokensRes = await http.get(
       baseUri.resolve('/admin/tokens/me'),
       headers: {'authorization': 'Bearer ${created.token}'},
@@ -92,9 +98,13 @@ void main() {
   });
 
   test('metadata and tarball routes require bearer token', () async {
-    final created = await tokenStore.createToken(ownerName: 'pkg-user@example.com');
+    final created = await tokenStore.createToken(
+      ownerName: 'pkg-user@example.com',
+    );
 
-    final unauthorizedMeta = await http.get(baseUri.resolve('/api/packages/test_pkg'));
+    final unauthorizedMeta = await http.get(
+      baseUri.resolve('/api/packages/test_pkg'),
+    );
     expect(unauthorizedMeta.statusCode, HttpStatus.unauthorized);
 
     final authorizedMeta = await http.get(
@@ -126,7 +136,9 @@ void main() {
   });
 
   test('session cookie cannot access protected metadata endpoints', () async {
-    final created = await tokenStore.createToken(ownerName: 'meta-user@example.com');
+    final created = await tokenStore.createToken(
+      ownerName: 'meta-user@example.com',
+    );
 
     final loginRes = await http.post(
       baseUri.resolve('/auth/login'),
@@ -148,33 +160,36 @@ void main() {
     expect(res.statusCode, HttpStatus.unauthorized);
   });
 
-  test('static download token mode supports auth login and admin bearer', () async {
-    final staticApp = unpub.App(
-      metaStore: _MemoryMetaStore(),
-      packageStore: _MemoryPackageStore(),
-      downloadToken: 'static-secret',
-      adminEmails: {'static-token-user'},
-    );
-    final staticServer = await staticApp.serve('127.0.0.1', 0);
-    final staticBaseUri = Uri.parse('http://127.0.0.1:${staticServer.port}');
-    try {
-      final loginRes = await http.post(
-        staticBaseUri.resolve('/auth/login'),
-        headers: {'content-type': 'application/json'},
-        body: json.encode({'token': 'static-secret'}),
+  test(
+    'static download token mode supports auth login and admin bearer',
+    () async {
+      final staticApp = unpub.App(
+        metaStore: _MemoryMetaStore(),
+        packageStore: _MemoryPackageStore(),
+        downloadToken: 'static-secret',
+        adminEmails: {'static-token-user'},
       );
-      expect(loginRes.statusCode, HttpStatus.ok);
-      expect(loginRes.headers['set-cookie'], contains('unpub_session='));
+      final staticServer = await staticApp.serve('127.0.0.1', 0);
+      final staticBaseUri = Uri.parse('http://127.0.0.1:${staticServer.port}');
+      try {
+        final loginRes = await http.post(
+          staticBaseUri.resolve('/auth/login'),
+          headers: {'content-type': 'application/json'},
+          body: json.encode({'token': 'static-secret'}),
+        );
+        expect(loginRes.statusCode, HttpStatus.ok);
+        expect(loginRes.headers['set-cookie'], contains('unpub_session='));
 
-      final adminRes = await http.get(
-        staticBaseUri.resolve('/admin/tokens/me'),
-        headers: {'authorization': 'Bearer static-secret'},
-      );
-      expect(adminRes.statusCode, HttpStatus.serviceUnavailable);
-    } finally {
-      await staticServer.close(force: true);
-    }
-  });
+        final adminRes = await http.get(
+          staticBaseUri.resolve('/admin/tokens/me'),
+          headers: {'authorization': 'Bearer static-secret'},
+        );
+        expect(adminRes.statusCode, HttpStatus.serviceUnavailable);
+      } finally {
+        await staticServer.close(force: true);
+      }
+    },
+  );
 }
 
 class _MemoryMetaStore implements unpub.MetaStore {
@@ -183,11 +198,7 @@ class _MemoryMetaStore implements unpub.MetaStore {
     [
       unpub.UnpubVersion(
         '1.0.0',
-        {
-          'name': 'test_pkg',
-          'version': '1.0.0',
-          'description': 'test package',
-        },
+        {'name': 'test_pkg', 'version': '1.0.0', 'description': 'test package'},
         null,
         'owner@example.com',
         null,

@@ -1,0 +1,13 @@
+# Workspace-level local infra for development/tests.
+
+services:
+  postgres:
+    image: postgres:16
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: dart_pub_test
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+

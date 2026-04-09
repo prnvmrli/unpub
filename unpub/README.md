@@ -14,21 +14,21 @@ Unpub is a self-hosted private Dart Pub server for Enterprise, with a simple web
 
 ```sh
 pub global activate unpub
-unpub --database mongodb://localhost:27017/dart_pub # Replace this with production database uri
+unpub --database postgresql://localhost:5432/dart_pub?sslmode=disable # Replace this with production database uri
 ```
 
 To serve a Flutter web frontend built from `unpub_web`:
 
 ```sh
 flutter build web --project-dir unpub_web
-unpub --database mongodb://localhost:27017/dart_pub --web-root unpub_web/build/web
+unpub --database postgresql://localhost:5432/dart_pub?sslmode=disable --web-root unpub_web/build/web
 ```
 
-To require API key auth (from SQL) for package and metadata endpoints:
+To require API key auth (from PostgreSQL) for package and metadata endpoints:
 
 ```sh
-unpub --database mongodb://localhost:27017/dart_pub \
-  --token-db-path ./unpub-tokens.db \
+unpub --database postgresql://localhost:5432/dart_pub?sslmode=disable \
+  --token-database postgresql://localhost:5432/dart_pub?sslmode=disable \
   --admin-emails admin@company.com,platform@company.com
 ```
 
@@ -43,21 +43,21 @@ The token database uses these tables:
 
 ```sql
 CREATE TABLE api_keys (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id BIGSERIAL PRIMARY KEY,
   token TEXT NOT NULL UNIQUE,
   owner_name TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'active', -- active / revoked
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  expires_at TEXT,
-  last_used_at TEXT
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ,
+  last_used_at TIMESTAMPTZ
 );
 
 CREATE TABLE downloads (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id BIGSERIAL PRIMARY KEY,
   token TEXT NOT NULL,
-  "package" TEXT NOT NULL,
+  package_name TEXT NOT NULL,
   version TEXT NOT NULL,
-  timestamp TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   ip_address TEXT
 );
 ```
@@ -66,7 +66,7 @@ Example token insert:
 
 ```sql
 INSERT INTO api_keys (token, owner_name, status, expires_at)
-VALUES ('my-secret-token', 'ci-bot', 'active', '2027-01-01 00:00:00');
+VALUES ('my-secret-token', 'ci-bot', 'active', '2027-01-01T00:00:00Z');
 ```
 
 `downloads` rows are written on authorized download requests.
@@ -76,13 +76,13 @@ Admin scripts:
 ```sh
 # create active token (auto-generated token value)
 fvm dart run unpub/tool/create_token.dart \
-  --db-path ./unpub-tokens.db \
+  --database postgresql://localhost:5432/dart_pub?sslmode=disable \
   --owner ci-bot \
   --expires-at 2027-01-01T00:00:00Z
 
 # revoke token
 fvm dart run unpub/tool/revoke_token.dart \
-  --db-path ./unpub-tokens.db \
+  --database postgresql://localhost:5432/dart_pub?sslmode=disable \
   --token your-token-value
 ```
 
@@ -107,22 +107,22 @@ Admin API (accepts either session cookie or Authorization bearer token):
 - `POST /admin/tokens/<id>/revoke`
   - Non-admin users can revoke only their own tokens.
 
-Unpub use mongodb as meta information store and file system as package(tarball) store by default.
+Unpub uses PostgreSQL as the meta/token store and file system as package (tarball) store by default.
 
 Dart API is also available for further customization.
 
 ### Dart API
 
 ```dart
-import 'package:mongo_dart/mongo_dart.dart';
 import 'package:unpub/unpub.dart' as unpub;
 
 main(List<String> args) async {
-  final db = Db('mongodb://localhost:27017/dart_pub');
-  await db.open(); // make sure the MongoDB connection opened
+  final db = await unpub.openPostgreSqlConnection(
+    'postgresql://localhost:5432/dart_pub?sslmode=disable',
+  );
 
   final app = unpub.App(
-    metaStore: unpub.MongoStore(db),
+    metaStore: unpub.PostgreSqlMetaStore(db),
     packageStore: unpub.FileStore('./unpub-packages'),
   );
 
