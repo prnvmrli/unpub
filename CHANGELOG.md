@@ -8,6 +8,11 @@ All notable changes to this repository are documented in this file.
 - Added PostgreSQL-backed metadata and token store implementations in `unpub`.
 - Added workspace-level Docker Compose at repo root for local PostgreSQL test infrastructure.
 - Added parallel-safe test database isolation per test file.
+- Added secure auth and token-management capabilities across backend and frontend:
+  - bcrypt-backed user auth with session cookies
+  - permissioned API tokens with hashed storage
+  - admin user management and download log views
+  - typed dashboard/login routing via `go_router_builder` in `unpub_web`
 
 ### Changed
 - Migrated `unpub` database layer from MongoDB/SQLite to PostgreSQL.
